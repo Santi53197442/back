@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "https://frontend-eosin-eight-41.vercel.app")
 public class AuthController {
 
     @Autowired

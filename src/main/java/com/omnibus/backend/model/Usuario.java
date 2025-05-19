@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 
 @Entity
-@Inheritance(strategy = InheritanceType.JOINED)  // Definir la estrategia de herencia
+
 @Table(name = "usuarios")
 public class Usuario {
     @Id

@@ -8,8 +8,8 @@
 		<version>3.2.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.solar</groupId>
-	<artifactId>code</artifactId>
+	<groupId>com.omnibus.backend</groupId>
+	<artifactId>pro</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>code</name>
 	<description>Demo project for Spring Boot</description>

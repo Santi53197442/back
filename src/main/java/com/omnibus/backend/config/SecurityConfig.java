@@ -42,6 +42,7 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/auth/register", "/auth/login").permitAll() // Endpoints públicos
+                        .requestMatchers("/actuator/health").permitAll()
                         // .requestMatchers("/api/admin/**").hasRole("ADMIN") // Ejemplo de ruta protegida por rol
                         .anyRequest().authenticated() // Todas las demás requieren autenticación
                 )

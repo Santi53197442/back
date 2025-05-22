@@ -36,11 +36,6 @@ public class SecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
-    // Configuración global de AuthenticationManagerBuilder (opcional si usas el bean anterior)
-    // Se puede usar para configurar el userDetailsService y passwordEncoder directamente
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.userDetailsService(customUserDetailsService).passwordEncoder(passwordEncoder());
-    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

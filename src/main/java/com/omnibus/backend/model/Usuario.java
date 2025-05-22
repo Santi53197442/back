@@ -1,12 +1,17 @@
 package com.omnibus.backend.model;
 
 import jakarta.persistence.*;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Collections;
 
 @Entity
-
 @Table(name = "usuarios")
-public class Usuario {
+public class Usuario implements UserDetails { // <-- Implementa UserDetails
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -18,26 +23,27 @@ public class Usuario {
     private String apellido;
 
     @Column(nullable = false, unique = true)
-    private Integer ci;
+    private Integer ci; // Considera String si puede tener ceros a la izquierda o caracteres no numéricos
 
     @Column(nullable = false)
-    private String contrasenia;
+    private String contrasenia; // Esta será la contraseña HASHED
 
     @Column(nullable = false, unique = true)
     private String email;
 
     @Column(nullable = false)
-    private Integer telefono;
+    private Integer telefono; // Considera String si puede tener prefijos, etc.
 
     @Column(nullable = false)
     private LocalDate fechaNac;
 
     @Column(nullable = false)
-    private String rol;  // Rol del usuario (Administrador, Vendedor, Cliente)
+    private String rol;  // Ej: "ROLE_CLIENTE", "ROLE_ADMINISTRADOR"
 
     // Constructores
     public Usuario() {
-        this.rol = "Cliente";  // Asignamos Cliente como rol predeterminado
+        // Rol por defecto con el prefijo ROLE_
+        this.rol = "ROLE_CLIENTE";
     }
 
     public Usuario(String nombre, String apellido, Integer ci, String contrasenia,
@@ -45,11 +51,12 @@ public class Usuario {
         this.nombre = nombre;
         this.apellido = apellido;
         this.ci = ci;
-        this.contrasenia = contrasenia;
+        this.contrasenia = contrasenia; // La contraseña ya debería venir hasheada para el constructor
         this.email = email;
         this.telefono = telefono;
         this.fechaNac = fechaNac;
-        this.rol = rol != null ? rol : "Cliente"; // Asegura que el rol predeterminado sea Cliente
+        // Asegurar el formato del rol al construir el objeto
+        this.setRol(rol); // Usar el setter para la lógica de formateo del rol
     }
 
     // Getters y Setters
@@ -85,11 +92,15 @@ public class Usuario {
         this.ci = ci;
     }
 
-    public String getContrasenia() {
-        return contrasenia;
+    // El getter para la contraseña es requerido por UserDetails
+    @Override
+    public String getPassword() {
+        return this.contrasenia;
     }
 
     public void setContrasenia(String contrasenia) {
+        // La contraseña debe ser hasheada ANTES de llamar a este setter
+        // por el PasswordEncoder en el servicio o controlador.
         this.contrasenia = contrasenia;
     }
 
@@ -122,6 +133,48 @@ public class Usuario {
     }
 
     public void setRol(String rol) {
-        this.rol = rol;
+        if (rol == null || rol.trim().isEmpty()) {
+            this.rol = "ROLE_CLIENTE"; // Rol por defecto
+        } else {
+            // Asegurar que el rol tenga el prefijo ROLE_ y esté en mayúsculas (convención)
+            if (rol.startsWith("ROLE_")) {
+                this.rol = rol.toUpperCase();
+            } else {
+                this.rol = "ROLE_" + rol.toUpperCase();
+            }
+        }
+    }
+
+    // --- Implementación de métodos UserDetails ---
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        // El campo 'rol' ya debe tener el formato "ROLE_NOMBRE_ROL"
+        return Collections.singletonList(new SimpleGrantedAuthority(this.rol));
+    }
+
+    @Override
+    public String getUsername() {
+        return this.email; // Usaremos el email como username para Spring Security
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true; // Puedes añadir lógica real aquí si es necesario
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true; // Puedes añadir lógica real aquí si es necesario
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true; // Puedes añadir lógica real aquí si es necesario
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true; // Puedes añadir lógica real aquí si es necesario (ej. verificación de email)
     }
 }

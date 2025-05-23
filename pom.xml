@@ -18,7 +18,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<!-- Definir la versión de JJWT como una propiedad para fácil actualización -->
-		<jjwt.version>0.11.5</jjwt.version>
+		<jjwt.version>0.11.5</jjwt.version> <!-- Asegúrate que esta versión sea compatible con Spring Boot 3.3.0, la 0.12.x es más reciente. Para 0.11.5 es probable que necesites javax.xml.bind si no está ya -->
 	</properties>
 	<dependencies>
 		<dependency>
@@ -30,7 +30,7 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
-		<!-- ======== NUEVAS DEPENDENCIAS PARA SPRING SECURITY Y JWT ======== -->
+		<!-- ======== SPRING SECURITY Y JWT ======== -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
@@ -53,7 +53,14 @@
 			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
 		</dependency>
-		<!-- ============================================================== -->
+		<!-- ===================================== -->
+
+		<!-- ======== DEPENDENCIA PARA ENVÍO DE CORREOS ======== -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		<!-- ================================================= -->
 
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -76,6 +83,32 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+
+		<!-- Si usas Java 9+ y JJWT < 0.12.x, puede que necesites esta dependencia
+             para JAXB, que fue removida de Java SE. Spring Boot 3 (Jakarta EE 9+)
+             usa jakarta.xml.bind, así que verifica si JJWT 0.11.5 la necesita
+             o si es mejor actualizar JJWT a una versión compatible con Jakarta EE.
+             Para JJWT 0.11.5, es probable que necesites javax.xml.bind
+        -->
+		<!--
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+        -->
+		<!-- Para Spring Boot 3 y Jakarta EE, si una librería aún usa javax, podrías necesitar adaptadores.
+             Sin embargo, para JJWT 0.11.5, usualmente el problema es la falta de JAXB.
+             La versión más reciente de JJWT (0.12.x) es compatible con Jakarta EE.
+             Si te encuentras con errores "javax.xml.bind.DatatypeConverter" es por esto.
+             Si no tienes errores con JJWT 0.11.5, puedes ignorar esta sección.
+        -->
+
 	</dependencies>
 
 	<build>
@@ -83,7 +116,6 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<!-- Configuración de Lombok para el plugin de Maven (opcional pero recomendado si usas Lombok) -->
 				<configuration>
 					<excludes>
 						<exclude>
@@ -96,7 +128,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-resources-plugin</artifactId>
-				<version>3.3.1</version> <!-- La versión que tenías está bien -->
+				<version>3.3.1</version>
 				<configuration>
 					<encoding>UTF-8</encoding>
 				</configuration>

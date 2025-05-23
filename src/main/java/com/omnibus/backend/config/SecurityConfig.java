@@ -1,33 +1,30 @@
 package com.omnibus.backend.config;
 
 import com.omnibus.backend.security.JwtRequestFilter;
-// No es necesario importar CustomUserDetailsService aquí si solo se usa para configurar el AuthenticationManager globalmente
-// import com.omnibus.backend.service.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod; // Importar HttpMethod
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-// import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder; // No se usa si se configura de otra forma
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+// import org.springframework.security.config.Customizer; // Para Customizer.withDefaults()
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-// import org.springframework.web.cors.CorsConfiguration; // Para configuración de CORS más detallada
-// import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-// import org.springframework.web.filter.CorsFilter;
-// import java.util.Arrays;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource; // Importar CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+// import org.springframework.web.filter.CorsFilter; // No necesitamos inyectar el filtro si usamos la fuente
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-
-    // @Autowired // CustomUserDetailsService se usa para configurar el AuthenticationManager global
-    // private CustomUserDetailsService customUserDetailsService; // No se inyecta directamente aquí si no se usa para configurar HttpSecurity directamente
 
     @Autowired
     private JwtRequestFilter jwtRequestFilter;
@@ -42,22 +39,39 @@ public class SecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
+    // Este bean define la FUENTE de configuración CORS
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "https://frontend-eosin-eight-41.vercel.app"
+        ));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedHeaders(List.of("*")); // O especifica los headers que necesitas
+        configuration.setAllowCredentials(true); // Importante para cookies/auth
+        // configuration.setMaxAge(3600L); // Opcional: cuánto tiempo el navegador puede cachear la respuesta pre-flight
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration); // Aplica esta configuración a todas las rutas
+        return source;
+    }
+
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // Usar la CorsConfigurationSource definida arriba
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
-                // .cors(Customizer.withDefaults()) // Si tienes un @Bean CorsConfigurationSource
-                // O, si usas @CrossOrigin en los controladores, esto podría no ser necesario o necesitar configuración diferente.
-                // Por ahora, con @CrossOrigin en controladores, podemos omitir .cors() aquí o usarlo si tienes un bean CorsFilter.
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
-                        // Rutas para el perfil del usuario, requieren autenticación
+                        .requestMatchers("/auth/forgot-password").permitAll()
+                        .requestMatchers("/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/user/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/user/profile").authenticated()
-                        // Podrías generalizarlo si tienes más endpoints bajo /api/user:
-                        // .requestMatchers("/api/user/**").authenticated()
-                        .anyRequest().authenticated() // Todas las demás requieren autenticación
+                        .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
@@ -65,20 +79,4 @@ public class SecurityConfig {
 
         return http.build();
     }
-
-    // Opcional: Bean para una configuración de CORS más global si no usas @CrossOrigin en cada controlador
-    /*
-    @Bean
-    public CorsFilter corsFilter() {
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true); // Permitir cookies/auth headers
-        config.addAllowedOrigin("http://localhost:3000"); // Tu frontend en desarrollo
-        config.addAllowedOrigin("https://tu-frontend-en-vercel.app"); // Tu frontend en producción
-        config.addAllowedHeader("*"); // Permitir todas las cabeceras
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS")); // Métodos permitidos
-        source.registerCorsConfiguration("/**", config); // Aplicar a todas las rutas
-        return new CorsFilter(source);
-    }
-    */
 }

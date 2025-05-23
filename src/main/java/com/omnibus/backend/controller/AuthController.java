@@ -7,25 +7,27 @@ import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.repository.UsuarioRepository;
 import com.omnibus.backend.security.JwtUtil;
 import com.omnibus.backend.service.CustomUserDetailsService;
-// Ya no se necesita UserService aquí si solo se usa en UserController
-// import com.omnibus.backend.service.UserService;
+import com.omnibus.backend.service.UserService; // <-- Asegúrate que la importación sea correcta
+import org.slf4j.Logger; // Para logging
+import org.slf4j.LoggerFactory; // Para logging
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-// Ya no se necesita Authentication ni SecurityContextHolder aquí para /profile
-// import org.springframework.security.core.Authentication;
-// import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-// import org.springframework.security.core.userdetails.UsernameNotFoundException; // Ya no se usa aquí
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
-@RequestMapping("/auth") // Solo para /register y /login
-@CrossOrigin(origins = "*")
+@RequestMapping("/auth")
+// @CrossOrigin(origins = "*") // Es mejor usar la configuración CORS global en SecurityConfig
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class); // Para logging
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -42,18 +44,37 @@ public class AuthController {
     @Autowired
     private JwtUtil jwtUtil;
 
-    // UserService ya no se inyecta aquí si no se usa en este controlador
-    // @Autowired
-    // private UserService userService;
+    @Autowired // <-- INYECTAR USERSERVICE
+    private UserService userService;
+
+    // Clases internas para las solicitudes de reseteo
+    static class EmailRequest {
+        public String email;
+    }
+    static class ResetPasswordRequest {
+        public String token;
+        public String newPassword;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterDTO dto) {
         if (usuarioRepository.findByEmail(dto.email).isPresent()) {
-            return ResponseEntity.badRequest().body("El email ya está registrado.");
+            return ResponseEntity.badRequest().body(Map.of("message", "El email ya está registrado."));
         }
+        // Validaciones básicas
+        if (dto.nombre == null || dto.nombre.trim().isEmpty() ||
+                dto.apellido == null || dto.apellido.trim().isEmpty() ||
+                dto.ci == null ||
+                dto.contrasenia == null || dto.contrasenia.trim().isEmpty() ||
+                dto.email == null || dto.email.trim().isEmpty() ||
+                dto.telefono == null ||
+                dto.fechaNac == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Todos los campos son requeridos."));
+        }
+
         String rolParaGuardar = dto.rol;
         if (rolParaGuardar == null || rolParaGuardar.trim().isEmpty()) {
-            rolParaGuardar = "ROLE_USER";
+            rolParaGuardar = "ROLE_USER"; // O "ROLE_CLIENTE" si es tu default
         } else if (!rolParaGuardar.startsWith("ROLE_")) {
             rolParaGuardar = "ROLE_" + rolParaGuardar.toUpperCase();
         }
@@ -68,7 +89,7 @@ public class AuthController {
                 rolParaGuardar
         );
         usuarioRepository.save(usuario);
-        return ResponseEntity.ok("Usuario registrado exitosamente.");
+        return ResponseEntity.ok(Map.of("message", "Usuario registrado exitosamente."));
     }
 
     @PostMapping("/login")
@@ -78,62 +99,68 @@ public class AuthController {
                     new UsernamePasswordAuthenticationToken(dto.email, dto.contrasenia)
             );
         } catch (BadCredentialsException e) {
-            return ResponseEntity.status(401).body("Credenciales incorrectas.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Credenciales incorrectas."));
         }
         final UserDetails userDetails = userDetailsService.loadUserByUsername(dto.email);
         final String token = jwtUtil.generateToken(userDetails);
 
-        String nombreUsuario = "";
-        String apellidoUsuario = "";
-        String rolParaFrontend = "";
-        String ciUsuario = "";
-        String telefonoUsuario = "";
-        String fechaNacUsuario = "";
+        Usuario usuario = usuarioRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado después de autenticación exitosa, esto no debería ocurrir."));
 
-        if (userDetails instanceof Usuario) {
-            Usuario usuario = (Usuario) userDetails;
-            nombreUsuario = usuario.getNombre();
-            apellidoUsuario = usuario.getApellido();
-            ciUsuario = usuario.getCi() != null ? String.valueOf(usuario.getCi()) : "";
-            telefonoUsuario = usuario.getTelefono() != null ? String.valueOf(usuario.getTelefono()) : "";
-            if (usuario.getFechaNac() != null) {
-                fechaNacUsuario = usuario.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
-            }
-            String rolCompleto = usuario.getRol();
-            if (rolCompleto != null && rolCompleto.startsWith("ROLE_")) {
-                rolParaFrontend = rolCompleto.substring(5).toLowerCase();
-            } else {
-                rolParaFrontend = rolCompleto != null ? rolCompleto.toLowerCase() : "";
-            }
+
+        String rolParaFrontend = "";
+        if (usuario.getRol() != null && usuario.getRol().startsWith("ROLE_")) {
+            rolParaFrontend = usuario.getRol().substring(5).toLowerCase();
         } else {
-            Usuario usuarioFromDb = usuarioRepository.findByEmail(userDetails.getUsername()).orElse(null);
-            if (usuarioFromDb != null) {
-                nombreUsuario = usuarioFromDb.getNombre();
-                apellidoUsuario = usuarioFromDb.getApellido();
-                ciUsuario = usuarioFromDb.getCi() != null ? String.valueOf(usuarioFromDb.getCi()) : "";
-                telefonoUsuario = usuarioFromDb.getTelefono() != null ? String.valueOf(usuarioFromDb.getTelefono()) : "";
-                if (usuarioFromDb.getFechaNac() != null) {
-                    fechaNacUsuario = usuarioFromDb.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
-                }
-                String rolCompleto = usuarioFromDb.getRol();
-                if (rolCompleto != null && rolCompleto.startsWith("ROLE_")) {
-                    rolParaFrontend = rolCompleto.substring(5).toLowerCase();
-                } else {
-                    rolParaFrontend = rolCompleto != null ? rolCompleto.toLowerCase() : "";
-                }
-            }
+            rolParaFrontend = usuario.getRol() != null ? usuario.getRol().toLowerCase() : "";
         }
+
         return ResponseEntity.ok(new AuthResponseDTO(
                 token,
-                userDetails.getUsername(),
+                usuario.getEmail(),
                 rolParaFrontend,
-                nombreUsuario,
-                apellidoUsuario,
-                ciUsuario,
-                telefonoUsuario,
-                fechaNacUsuario
+                usuario.getNombre(),
+                usuario.getApellido(),
+                usuario.getCi() != null ? String.valueOf(usuario.getCi()) : "",
+                usuario.getTelefono() != null ? String.valueOf(usuario.getTelefono()) : "",
+                usuario.getFechaNac() != null ? usuario.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : ""
         ));
     }
 
-    // LOS MÉTODOS getCurrentUserProfile() Y updateUserProfile() SE HAN MOVIDO A UserController.java
+    // --- ENDPOINTS PARA RECUPERACIÓN DE CONTRASEÑA ---
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody EmailRequest emailRequest) {
+        try {
+            if (emailRequest.email == null || emailRequest.email.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "El email es requerido."));
+            }
+            // Llamar al método de instancia de userService
+            userService.requestPasswordReset(emailRequest.email);
+            return ResponseEntity.ok(Map.of("message", "Si tu correo está registrado, recibirás un enlace para restablecer tu contraseña en breve."));
+        } catch (Exception e) {
+            logger.error("Error en /forgot-password para email {}: {}", emailRequest.email, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Ocurrió un error procesando tu solicitud."));
+        }
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest resetRequest) {
+        if (resetRequest.token == null || resetRequest.token.trim().isEmpty() ||
+                resetRequest.newPassword == null || resetRequest.newPassword.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Token y nueva contraseña son requeridos."));
+        }
+        // Aquí podrías añadir validación de la fortaleza de la nueva contraseña
+
+        // Llamar al método de instancia de userService
+        boolean success = userService.resetPassword(resetRequest.token, resetRequest.newPassword);
+        if (success) {
+            return ResponseEntity.ok(Map.of("message", "Contraseña restablecida exitosamente."));
+        } else {
+            // El mensaje de error específico (token inválido vs. expirado) se maneja mejor
+            // devolviendo diferentes códigos de error o mensajes desde el servicio,
+            // pero para simplificar, usamos un mensaje genérico de fallo de token aquí.
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "El enlace de restablecimiento es inválido o ha expirado. Por favor, solicita uno nuevo."));
+        }
+    }
 }

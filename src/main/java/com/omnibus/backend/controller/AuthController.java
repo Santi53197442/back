@@ -57,39 +57,34 @@ public class AuthController {
     static class ResetPasswordRequest { public String token; public String newPassword; }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) {
+    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) { // RegisterDTO puede seguir igual
         if (usuarioRepository.findByEmail(dto.email).isPresent()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El email ya está registrado."));
         }
+        // Validaciones básicas (se mantienen)
         if (dto.nombre == null || dto.nombre.trim().isEmpty() || /* ...resto de validaciones... */ dto.fechaNac == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Todos los campos son requeridos."));
         }
 
-        // --- CAMBIO TEMPORAL ---
-        // Crear una instancia de Administrador
-        // Asumimos que Administrador tiene un campo 'areaResponsabilidad' (o como lo hayas llamado)
-        // y le pasamos un valor por defecto o uno que puedas controlar desde el DTO si lo modificas.
-        String areaResponsabilidadPorDefecto = "General"; // O cualquier valor que necesite el constructor de Administrador
-
-        Administrador nuevoUsuario = new Administrador( // Cambiado de Cliente a Administrador
+        // Para el registro público, siempre creamos un Cliente.
+        // Los campos específicos de Cliente (si los tuviera y vinieran del DTO) se pasarían aquí.
+        Cliente nuevoCliente = new Cliente(
                 dto.nombre,
                 dto.apellido,
                 dto.ci,
-                passwordEncoder.encode(dto.contrasenia),
+                passwordEncoder.encode(dto.contrasenia), // Hashear contraseña
                 dto.email,
                 dto.telefono,
-                dto.fechaNac,
-                areaResponsabilidadPorDefecto // Pasar el valor para el campo específico de Administrador
+                dto.fechaNac
+                // , 0 // Ejemplo si Cliente tuviera 'puntosFidelidad' iniciales
         );
-        // --- FIN DE CAMBIO TEMPORAL ---
 
         try {
-            // usuarioRepository.save(nuevoCliente); // Línea original
-            usuarioRepository.save(nuevoUsuario);    // Guardamos la instancia de Administrador
-            return ResponseEntity.ok(Map.of("message", "Usuario ADMINISTRADOR (temporal) registrado exitosamente."));
+            usuarioRepository.save(nuevoCliente); // Guardamos la instancia de Cliente
+            return ResponseEntity.ok(Map.of("message", "Usuario Cliente registrado exitosamente."));
         } catch (Exception e) {
-            logger.error("Error al registrar nuevo usuario (temporalmente como admin): {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error al registrar el usuario (admin temporal)."));
+            logger.error("Error al registrar nuevo cliente: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error al registrar el usuario."));
         }
     }
 

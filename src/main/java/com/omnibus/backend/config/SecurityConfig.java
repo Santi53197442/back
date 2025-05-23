@@ -7,23 +7,24 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity; // Importar
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-// import org.springframework.security.config.Customizer; // Para Customizer.withDefaults()
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource; // Importar CorsConfigurationSource
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-// import org.springframework.web.filter.CorsFilter; // No necesitamos inyectar el filtro si usamos la fuente
+
 import java.util.Arrays;
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true) // Habilita @PreAuthorize, @PostAuthorize, etc.
 public class SecurityConfig {
 
     @Autowired
@@ -39,10 +40,10 @@ public class SecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
-    // Este bean define la FUENTE de configuración CORS
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // Asegúrate de que estas URLs sean las correctas y definitivas de tu frontend
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "https://frontend-eosin-eight-41.vercel.app",
@@ -50,14 +51,15 @@ public class SecurityConfig {
                 "https://frontend-git-master-santi53197442s-projects.vercel.app",
                 "https://frontend-4f1xmt5az-santi53197442s-projects.vercel.app",
                 "https://frontend-kndjuqyhd-santi53197442s-projects.vercel.app"
+                // Añade tu URL de producción final de Vercel aquí también si es diferente
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("*")); // O especifica los headers que necesitas
-        configuration.setAllowCredentials(true); // Importante para cookies/auth
-        // configuration.setMaxAge(3600L); // Opcional: cuánto tiempo el navegador puede cachear la respuesta pre-flight
+        configuration.setAllowedHeaders(List.of("*")); // Para producción, considera ser más específico
+        configuration.setAllowCredentials(true);
+        // configuration.setMaxAge(3600L); // Opcional
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration); // Aplica esta configuración a todas las rutas
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
@@ -65,16 +67,26 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Usar la CorsConfigurationSource definida arriba
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authz -> authz
+                        // Endpoints públicos
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/actuator/**").permitAll() // Permitir acceso a todos los endpoints de Actuator
                         .requestMatchers("/auth/forgot-password").permitAll()
                         .requestMatchers("/auth/reset-password").permitAll()
+
+                        // Endpoints de Administrador
+                        // Requieren autenticación y el rol 'ADMINISTRADOR'
+                        // El prefijo "ROLE_" es implícito para hasRole()
+                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
+
+                        // Endpoints de Usuario Autenticado (cualquier rol autenticado)
                         .requestMatchers(HttpMethod.GET, "/api/user/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/user/profile").authenticated()
+                        // Añade aquí otros endpoints que requieran solo autenticación pero no un rol específico
+
+                        // Todas las demás solicitudes deben estar autenticadas
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));

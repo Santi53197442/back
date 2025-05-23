@@ -1,28 +1,29 @@
 package com.omnibus.backend.controller;
 
-import com.omnibus.backend.dto.*;
+import com.omnibus.backend.dto.AuthResponseDTO;
+import com.omnibus.backend.dto.LoginDTO;
+import com.omnibus.backend.dto.RegisterDTO;
 import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.repository.UsuarioRepository;
 import com.omnibus.backend.security.JwtUtil;
 import com.omnibus.backend.service.CustomUserDetailsService;
-import com.omnibus.backend.service.UserService; // <-- PASO 1: IMPORTA UserService
+// Ya no se necesita UserService aquí si solo se usa en UserController
+// import com.omnibus.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+// Ya no se necesita Authentication ni SecurityContextHolder aquí para /profile
+// import org.springframework.security.core.Authentication;
+// import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+// import org.springframework.security.core.userdetails.UsernameNotFoundException; // Ya no se usa aquí
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-// Cambiamos el RequestMapping base si estos endpoints no son estrictamente de "auth"
-// Podrías tener /auth para login/register y /api/user para profile, o mantenerlos juntos si prefieres.
-// Si los endpoints /profile se quedan aquí, el @RequestMapping("/auth") está bien.
-@RequestMapping("/auth")
+@RequestMapping("/auth") // Solo para /register y /login
 @CrossOrigin(origins = "*")
 public class AuthController {
 
@@ -41,10 +42,10 @@ public class AuthController {
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Autowired // <-- PASO 2: INYECTA UserService
-    private UserService userService;
+    // UserService ya no se inyecta aquí si no se usa en este controlador
+    // @Autowired
+    // private UserService userService;
 
-    // ... (método /register sin cambios) ...
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterDTO dto) {
         if (usuarioRepository.findByEmail(dto.email).isPresent()) {
@@ -70,7 +71,6 @@ public class AuthController {
         return ResponseEntity.ok("Usuario registrado exitosamente.");
     }
 
-
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginDTO dto) {
         try {
@@ -80,42 +80,32 @@ public class AuthController {
         } catch (BadCredentialsException e) {
             return ResponseEntity.status(401).body("Credenciales incorrectas.");
         }
-
         final UserDetails userDetails = userDetailsService.loadUserByUsername(dto.email);
         final String token = jwtUtil.generateToken(userDetails);
 
         String nombreUsuario = "";
         String apellidoUsuario = "";
         String rolParaFrontend = "";
-        String ciUsuario = "";         // <-- AÑADIR
-        String telefonoUsuario = "";   // <-- AÑADIR
-        String fechaNacUsuario = ""; // <-- AÑADIR (en formato YYYY-MM-DD)
+        String ciUsuario = "";
+        String telefonoUsuario = "";
+        String fechaNacUsuario = "";
 
         if (userDetails instanceof Usuario) {
             Usuario usuario = (Usuario) userDetails;
             nombreUsuario = usuario.getNombre();
             apellidoUsuario = usuario.getApellido();
-
-            // CI - Asumimos que getCi() devuelve Integer o Long, convertir a String
             ciUsuario = usuario.getCi() != null ? String.valueOf(usuario.getCi()) : "";
-
-            // Teléfono - Asumimos que getTelefono() devuelve Integer o Long, convertir a String
             telefonoUsuario = usuario.getTelefono() != null ? String.valueOf(usuario.getTelefono()) : "";
-
-            // Fecha de Nacimiento - Asumimos que getFechaNac() devuelve LocalDate
             if (usuario.getFechaNac() != null) {
-                fechaNacUsuario = usuario.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE); // "YYYY-MM-DD"
+                fechaNacUsuario = usuario.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
             }
-
             String rolCompleto = usuario.getRol();
             if (rolCompleto != null && rolCompleto.startsWith("ROLE_")) {
                 rolParaFrontend = rolCompleto.substring(5).toLowerCase();
             } else {
                 rolParaFrontend = rolCompleto != null ? rolCompleto.toLowerCase() : "";
             }
-
         } else {
-            // Fallback si UserDetails no es tu entidad Usuario directamente
             Usuario usuarioFromDb = usuarioRepository.findByEmail(userDetails.getUsername()).orElse(null);
             if (usuarioFromDb != null) {
                 nombreUsuario = usuarioFromDb.getNombre();
@@ -125,7 +115,6 @@ public class AuthController {
                 if (usuarioFromDb.getFechaNac() != null) {
                     fechaNacUsuario = usuarioFromDb.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
                 }
-
                 String rolCompleto = usuarioFromDb.getRol();
                 if (rolCompleto != null && rolCompleto.startsWith("ROLE_")) {
                     rolParaFrontend = rolCompleto.substring(5).toLowerCase();
@@ -134,57 +123,17 @@ public class AuthController {
                 }
             }
         }
-
         return ResponseEntity.ok(new AuthResponseDTO(
                 token,
-                userDetails.getUsername(), // email
+                userDetails.getUsername(),
                 rolParaFrontend,
                 nombreUsuario,
                 apellidoUsuario,
-                ciUsuario,         // <-- AÑADIR
-                telefonoUsuario,   // <-- AÑADIR
-                fechaNacUsuario    // <-- AÑADIR
+                ciUsuario,
+                telefonoUsuario,
+                fechaNacUsuario
         ));
     }
 
-
-    // Los métodos /profile ahora usarán el userService inyectado
-    @GetMapping("/profile")
-    public ResponseEntity<?> getCurrentUserProfile() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            return ResponseEntity.status(401).body("Usuario no autenticado.");
-        }
-        String currentUsername = authentication.getName();
-
-        try {
-            UserProfileDTO userProfile = userService.getUserProfileByEmail(currentUsername); // Ahora 'userService' está disponible
-            return ResponseEntity.ok(userProfile);
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(404).body("Usuario no encontrado.");
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error al obtener el perfil del usuario.");
-        }
-    }
-
-    @PutMapping("/profile")
-    public ResponseEntity<?> updateUserProfile(@RequestBody UpdateUserDTO updateUserDTO) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            return ResponseEntity.status(401).body("Usuario no autenticado.");
-        }
-        String currentUsername = authentication.getName();
-
-        try {
-            UserProfileDTO updatedUserProfile = userService.updateUserProfile(currentUsername, updateUserDTO); // Ahora 'userService' está disponible
-            return ResponseEntity.ok(updatedUserProfile);
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(404).body("Usuario no encontrado.");
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            e.printStackTrace(); // Es buena idea loguear la traza completa del error en el servidor
-            return ResponseEntity.status(500).body("Error interno al actualizar el perfil.");
-        }
-    }
+    // LOS MÉTODOS getCurrentUserProfile() Y updateUserProfile() SE HAN MOVIDO A UserController.java
 }

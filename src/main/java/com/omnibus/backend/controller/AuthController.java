@@ -71,7 +71,6 @@ public class AuthController {
     }
 
 
-    // ... (método /login sin cambios) ...
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginDTO dto) {
         try {
@@ -81,26 +80,52 @@ public class AuthController {
         } catch (BadCredentialsException e) {
             return ResponseEntity.status(401).body("Credenciales incorrectas.");
         }
+
         final UserDetails userDetails = userDetailsService.loadUserByUsername(dto.email);
         final String token = jwtUtil.generateToken(userDetails);
+
         String nombreUsuario = "";
         String apellidoUsuario = "";
         String rolParaFrontend = "";
+        String ciUsuario = "";         // <-- AÑADIR
+        String telefonoUsuario = "";   // <-- AÑADIR
+        String fechaNacUsuario = ""; // <-- AÑADIR (en formato YYYY-MM-DD)
+
         if (userDetails instanceof Usuario) {
             Usuario usuario = (Usuario) userDetails;
             nombreUsuario = usuario.getNombre();
             apellidoUsuario = usuario.getApellido();
+
+            // CI - Asumimos que getCi() devuelve Integer o Long, convertir a String
+            ciUsuario = usuario.getCi() != null ? String.valueOf(usuario.getCi()) : "";
+
+            // Teléfono - Asumimos que getTelefono() devuelve Integer o Long, convertir a String
+            telefonoUsuario = usuario.getTelefono() != null ? String.valueOf(usuario.getTelefono()) : "";
+
+            // Fecha de Nacimiento - Asumimos que getFechaNac() devuelve LocalDate
+            if (usuario.getFechaNac() != null) {
+                fechaNacUsuario = usuario.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE); // "YYYY-MM-DD"
+            }
+
             String rolCompleto = usuario.getRol();
             if (rolCompleto != null && rolCompleto.startsWith("ROLE_")) {
                 rolParaFrontend = rolCompleto.substring(5).toLowerCase();
             } else {
                 rolParaFrontend = rolCompleto != null ? rolCompleto.toLowerCase() : "";
             }
+
         } else {
+            // Fallback si UserDetails no es tu entidad Usuario directamente
             Usuario usuarioFromDb = usuarioRepository.findByEmail(userDetails.getUsername()).orElse(null);
             if (usuarioFromDb != null) {
                 nombreUsuario = usuarioFromDb.getNombre();
                 apellidoUsuario = usuarioFromDb.getApellido();
+                ciUsuario = usuarioFromDb.getCi() != null ? String.valueOf(usuarioFromDb.getCi()) : "";
+                telefonoUsuario = usuarioFromDb.getTelefono() != null ? String.valueOf(usuarioFromDb.getTelefono()) : "";
+                if (usuarioFromDb.getFechaNac() != null) {
+                    fechaNacUsuario = usuarioFromDb.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+                }
+
                 String rolCompleto = usuarioFromDb.getRol();
                 if (rolCompleto != null && rolCompleto.startsWith("ROLE_")) {
                     rolParaFrontend = rolCompleto.substring(5).toLowerCase();
@@ -109,12 +134,16 @@ public class AuthController {
                 }
             }
         }
+
         return ResponseEntity.ok(new AuthResponseDTO(
                 token,
-                userDetails.getUsername(),
+                userDetails.getUsername(), // email
                 rolParaFrontend,
                 nombreUsuario,
-                apellidoUsuario
+                apellidoUsuario,
+                ciUsuario,         // <-- AÑADIR
+                telefonoUsuario,   // <-- AÑADIR
+                fechaNacUsuario    // <-- AÑADIR
         ));
     }
 

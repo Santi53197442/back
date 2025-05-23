@@ -45,7 +45,9 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
-                "https://frontend-pjqhx2c7u-santi53197442s-projects.vercel.app"
+                "https://frontend-eosin-eight-41.vercel.app",
+                "https://frontend-pjqhx2c7u-santi53197442s-projects.vercel.app",
+                "https://frontend-git-master-santi53197442s-projects.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*")); // O especifica los headers que necesitas

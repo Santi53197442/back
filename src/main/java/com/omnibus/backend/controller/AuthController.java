@@ -23,6 +23,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import com.omnibus.backend.model.Administrador; // Importa la clase Administrador
+
 
 import java.util.Map;
 
@@ -54,8 +56,8 @@ public class AuthController {
     static class EmailRequest { public String email; }
     static class ResetPasswordRequest { public String token; public String newPassword; }
 
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) { // RegisterDTO puede seguir igual
+    @PostMapping("/register") // O quizás una ruta diferente como "/admin/create-admin" protegida
+    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) { // RegisterDTO podría necesitar campos para Administrador
         if (usuarioRepository.findByEmail(dto.email).isPresent()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El email ya está registrado."));
         }
@@ -64,25 +66,28 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "Todos los campos son requeridos."));
         }
 
-        // Para el registro público, siempre creamos un Cliente.
-        // Los campos específicos de Cliente (si los tuviera y vinieran del DTO) se pasarían aquí.
-        Cliente nuevoCliente = new Cliente(
+        // Crear una instancia de Administrador
+        // Asumimos que Administrador tiene un campo 'departamentoAsignado' como en el ejemplo
+        // y que RegisterDTO ahora podría tener un campo para esto, o se usa un valor por defecto.
+        String departamentoPorDefecto = "Sistemas"; // O obtenerlo del DTO si lo añades: dto.departamentoAsignado
+
+        Administrador nuevoAdministrador = new Administrador(
                 dto.nombre,
                 dto.apellido,
                 dto.ci,
                 passwordEncoder.encode(dto.contrasenia), // Hashear contraseña
                 dto.email,
                 dto.telefono,
-                dto.fechaNac
-                // , 0 // Ejemplo si Cliente tuviera 'puntosFidelidad' iniciales
+                dto.fechaNac,
+                departamentoPorDefecto // Pasar el valor para el campo específico de Administrador
         );
 
         try {
-            usuarioRepository.save(nuevoCliente); // Guardamos la instancia de Cliente
-            return ResponseEntity.ok(Map.of("message", "Usuario Cliente registrado exitosamente."));
+            usuarioRepository.save(nuevoAdministrador); // Guardamos la instancia de Administrador
+            return ResponseEntity.ok(Map.of("message", "Usuario Administrador registrado exitosamente."));
         } catch (Exception e) {
-            logger.error("Error al registrar nuevo cliente: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error al registrar el usuario."));
+            logger.error("Error al registrar nuevo administrador: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error al registrar el usuario administrador."));
         }
     }
 

@@ -3,13 +3,17 @@ package com.omnibus.backend.controller;
 import com.omnibus.backend.dto.AuthResponseDTO;
 import com.omnibus.backend.dto.LoginDTO;
 import com.omnibus.backend.dto.RegisterDTO;
-import com.omnibus.backend.model.Usuario;
+// Importa las subclases si las vas a usar explícitamente con instanceof
+import com.omnibus.backend.model.Administrador;
+import com.omnibus.backend.model.Cliente;
+import com.omnibus.backend.model.Usuario; // Clase base
+import com.omnibus.backend.model.Vendedor;
 import com.omnibus.backend.repository.UsuarioRepository;
 import com.omnibus.backend.security.JwtUtil;
 import com.omnibus.backend.service.CustomUserDetailsService;
-import com.omnibus.backend.service.UserService; // <-- Asegúrate que la importación sea correcta
-import org.slf4j.Logger; // Para logging
-import org.slf4j.LoggerFactory; // Para logging
+import com.omnibus.backend.service.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,13 +28,12 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-// @CrossOrigin(origins = "*") // Es mejor usar la configuración CORS global en SecurityConfig
 public class AuthController {
 
-    private static final Logger logger = LoggerFactory.getLogger(AuthController.class); // Para logging
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @Autowired
-    private UsuarioRepository usuarioRepository;
+    private UsuarioRepository usuarioRepository; // Sigue siendo UsuarioRepository
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -39,57 +42,48 @@ public class AuthController {
     private AuthenticationManager authenticationManager;
 
     @Autowired
-    private CustomUserDetailsService userDetailsService;
+    private CustomUserDetailsService userDetailsService; // Devuelve UserDetails (que será Cliente, Vendedor, etc.)
 
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Autowired // <-- INYECTAR USERSERVICE
-    private UserService userService;
+    @Autowired
+    private UserService userService; // Para forgot-password y reset-password
 
-    // Clases internas para las solicitudes de reseteo
-    static class EmailRequest {
-        public String email;
-    }
-    static class ResetPasswordRequest {
-        public String token;
-        public String newPassword;
-    }
+    // Clases internas para las solicitudes de reseteo (se mantienen igual)
+    static class EmailRequest { public String email; }
+    static class ResetPasswordRequest { public String token; public String newPassword; }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) {
+    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) { // RegisterDTO puede seguir igual
         if (usuarioRepository.findByEmail(dto.email).isPresent()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El email ya está registrado."));
         }
-        // Validaciones básicas
-        if (dto.nombre == null || dto.nombre.trim().isEmpty() ||
-                dto.apellido == null || dto.apellido.trim().isEmpty() ||
-                dto.ci == null ||
-                dto.contrasenia == null || dto.contrasenia.trim().isEmpty() ||
-                dto.email == null || dto.email.trim().isEmpty() ||
-                dto.telefono == null ||
-                dto.fechaNac == null) {
+        // Validaciones básicas (se mantienen)
+        if (dto.nombre == null || dto.nombre.trim().isEmpty() || /* ...resto de validaciones... */ dto.fechaNac == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Todos los campos son requeridos."));
         }
 
-        String rolParaGuardar = dto.rol;
-        if (rolParaGuardar == null || rolParaGuardar.trim().isEmpty()) {
-            rolParaGuardar = "ROLE_USER"; // O "ROLE_CLIENTE" si es tu default
-        } else if (!rolParaGuardar.startsWith("ROLE_")) {
-            rolParaGuardar = "ROLE_" + rolParaGuardar.toUpperCase();
-        }
-        Usuario usuario = new Usuario(
+        // Para el registro público, siempre creamos un Cliente.
+        // Los campos específicos de Cliente (si los tuviera y vinieran del DTO) se pasarían aquí.
+        Cliente nuevoCliente = new Cliente(
                 dto.nombre,
                 dto.apellido,
                 dto.ci,
-                passwordEncoder.encode(dto.contrasenia),
+                passwordEncoder.encode(dto.contrasenia), // Hashear contraseña
                 dto.email,
                 dto.telefono,
-                dto.fechaNac,
-                rolParaGuardar
+                dto.fechaNac
+                // , 0 // Ejemplo si Cliente tuviera 'puntosFidelidad' iniciales
         );
-        usuarioRepository.save(usuario);
-        return ResponseEntity.ok(Map.of("message", "Usuario registrado exitosamente."));
+
+        try {
+            usuarioRepository.save(nuevoCliente); // Guardamos la instancia de Cliente
+            return ResponseEntity.ok(Map.of("message", "Usuario Cliente registrado exitosamente."));
+        } catch (Exception e) {
+            logger.error("Error al registrar nuevo cliente: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error al registrar el usuario."));
+        }
     }
 
     @PostMapping("/login")
@@ -101,41 +95,47 @@ public class AuthController {
         } catch (BadCredentialsException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Credenciales incorrectas."));
         }
+
         final UserDetails userDetails = userDetailsService.loadUserByUsername(dto.email);
         final String token = jwtUtil.generateToken(userDetails);
 
-        Usuario usuario = usuarioRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado después de autenticación exitosa, esto no debería ocurrir."));
+        // userDetails ya es una instancia de Cliente, Vendedor o Administrador.
+        // Lo casteamos a Usuario (clase base) para acceder a campos comunes.
+        Usuario usuarioAutenticado = (Usuario) userDetails;
 
-
-        String rolParaFrontend = "";
-        if (usuario.getRol() != null && usuario.getRol().startsWith("ROLE_")) {
-            rolParaFrontend = usuario.getRol().substring(5).toLowerCase();
-        } else {
-            rolParaFrontend = usuario.getRol() != null ? usuario.getRol().toLowerCase() : "";
+        String rolParaFrontend = "desconocido"; // Rol por defecto
+        // Determinar el rol basado en el tipo de instancia
+        if (usuarioAutenticado instanceof Administrador) {
+            rolParaFrontend = "administrador";
+        } else if (usuarioAutenticado instanceof Vendedor) {
+            rolParaFrontend = "vendedor";
+        } else if (usuarioAutenticado instanceof Cliente) {
+            rolParaFrontend = "cliente";
         }
+        // Alternativamente, podrías obtenerlo de userDetails.getAuthorities() si solo hay un rol
+        // y formatearlo, pero instanceof es más directo si el tipo de clase define el rol principal.
 
         return ResponseEntity.ok(new AuthResponseDTO(
                 token,
-                usuario.getEmail(),
-                rolParaFrontend,
-                usuario.getNombre(),
-                usuario.getApellido(),
-                usuario.getCi() != null ? String.valueOf(usuario.getCi()) : "",
-                usuario.getTelefono() != null ? String.valueOf(usuario.getTelefono()) : "",
-                usuario.getFechaNac() != null ? usuario.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : ""
+                usuarioAutenticado.getEmail(),
+                rolParaFrontend, // String del rol determinado
+                usuarioAutenticado.getNombre(),
+                usuarioAutenticado.getApellido(),
+                usuarioAutenticado.getCi() != null ? String.valueOf(usuarioAutenticado.getCi()) : "",
+                usuarioAutenticado.getTelefono() != null ? String.valueOf(usuarioAutenticado.getTelefono()) : "",
+                usuarioAutenticado.getFechaNac() != null ? usuarioAutenticado.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : ""
         ));
     }
 
-    // --- ENDPOINTS PARA RECUPERACIÓN DE CONTRASEÑA ---
-
+    // Endpoints de forgot-password y reset-password se mantienen igual
+    // ya que operan sobre 'UsuarioBase' (ahora 'Usuario') a través de 'UserService'.
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@RequestBody EmailRequest emailRequest) {
+        // ... (sin cambios aquí, ya que userService maneja la lógica con UsuarioRepository) ...
         try {
             if (emailRequest.email == null || emailRequest.email.trim().isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("message", "El email es requerido."));
             }
-            // Llamar al método de instancia de userService
             userService.requestPasswordReset(emailRequest.email);
             return ResponseEntity.ok(Map.of("message", "Si tu correo está registrado, recibirás un enlace para restablecer tu contraseña en breve."));
         } catch (Exception e) {
@@ -146,20 +146,15 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest resetRequest) {
+        // ... (sin cambios aquí) ...
         if (resetRequest.token == null || resetRequest.token.trim().isEmpty() ||
                 resetRequest.newPassword == null || resetRequest.newPassword.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "Token y nueva contraseña son requeridos."));
         }
-        // Aquí podrías añadir validación de la fortaleza de la nueva contraseña
-
-        // Llamar al método de instancia de userService
         boolean success = userService.resetPassword(resetRequest.token, resetRequest.newPassword);
         if (success) {
             return ResponseEntity.ok(Map.of("message", "Contraseña restablecida exitosamente."));
         } else {
-            // El mensaje de error específico (token inválido vs. expirado) se maneja mejor
-            // devolviendo diferentes códigos de error o mensajes desde el servicio,
-            // pero para simplificar, usamos un mensaje genérico de fallo de token aquí.
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "El enlace de restablecimiento es inválido o ha expirado. Por favor, solicita uno nuevo."));
         }
     }

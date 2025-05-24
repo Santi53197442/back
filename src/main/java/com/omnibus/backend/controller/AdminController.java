@@ -19,6 +19,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.omnibus.backend.dto.UserViewDTO;
+import com.omnibus.backend.model.Cliente;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
@@ -229,5 +231,37 @@ public class AdminController {
         });
         errors.put("messageGeneral", "Error de validación en los datos enviados.");
         return errors;
+    }
+
+
+    //listar
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<List<UserViewDTO>> getAllUsers() {
+        List<Usuario> usuarios = usuarioRepository.findAll();
+        List<UserViewDTO> userViewDTOs = usuarios.stream().map(usuario -> {
+            String rol = "DESCONOCIDO";
+            if (usuario instanceof Administrador) {
+                rol = "ADMINISTRADOR";
+            } else if (usuario instanceof Vendedor) {
+                rol = "VENDEDOR";
+            } else if (usuario instanceof Cliente) { // Asumiendo que tienes una clase Cliente que hereda de Usuario
+                rol = "CLIENTE";
+            }
+            // Puedes añadir más lógica para otros tipos de usuario o extraer roles de una colección de roles si la tienes
+
+            return new UserViewDTO(
+                    usuario.getId(),
+                    usuario.getNombre(),
+                    usuario.getApellido(),
+                    usuario.getEmail(),
+                    usuario.getCi(), // Asegúrate que getCi() devuelva Integer o adáptalo
+                    usuario.getTelefono(), // Asegúrate que getTelefono() devuelva Integer o adáptalo
+                    usuario.getFechaNac(),
+                    rol
+            );
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(userViewDTOs);
     }
 }

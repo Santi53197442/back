@@ -1,16 +1,14 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS" // o DOCKERFILE si usas Dockerfile
+    "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "npm start", // o el comando para iniciar tu app
+    "startCommand": "npm start",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 10, // segundos
-    "healthcheckInterval": 15, // segundos
-    "healthcheckGracePeriod": 45, // segundos (¡ajusta esto según tu app!)
+    "healthcheckTimeout": 10,
+    "healthcheckInterval": 15,
+    "healthcheckGracePeriod": 45,
     "healthcheckRetries": 3
-    // "restartPolicyType": "ON_FAILURE", // Opcional: ON_FAILURE es común
-    // "restartPolicyMaxRetries": 3      // Opcional
   }
 }

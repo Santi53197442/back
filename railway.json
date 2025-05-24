@@ -7,7 +7,7 @@
     "healthcheckPath": "/",
     "healthcheckTimeout": 60,
     "healthcheckInterval": 20,
-    "healthcheckGracePeriod": 200,
+    "healthcheckGracePeriod": 230,
     "healthcheckRetries": 3,
     "ports": "8080:8080"
   }

@@ -1,14 +1,24 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "NIXPACKS",
+    "nixpacksConfig": {
+      "phases": {
+        "setup": {
+          "cmds": ["echo 'Setting up Node environment...'"]
+        },
+        "install": {
+          "cmds": ["npm install --production"]
+        }
+      }
+    }
   },
   "deploy": {
     "startCommand": "npm start",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 10,
-    "healthcheckInterval": 15,
-    "healthcheckGracePeriod": 45,
+    "healthcheckTimeout": 60,
+    "healthcheckInterval": 20,
+    "healthcheckGracePeriod": 90,
     "healthcheckRetries": 3
   }
 }

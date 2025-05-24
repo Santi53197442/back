@@ -84,30 +84,15 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- Si usas Java 9+ y JJWT < 0.12.x, puede que necesites esta dependencia
-             para JAXB, que fue removida de Java SE. Spring Boot 3 (Jakarta EE 9+)
-             usa jakarta.xml.bind, así que verifica si JJWT 0.11.5 la necesita
-             o si es mejor actualizar JJWT a una versión compatible con Jakarta EE.
-             Para JJWT 0.11.5, es probable que necesites javax.xml.bind
-        -->
-		<!--
-        <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-        -->
-		<!-- Para Spring Boot 3 y Jakarta EE, si una librería aún usa javax, podrías necesitar adaptadores.
-             Sin embargo, para JJWT 0.11.5, usualmente el problema es la falta de JAXB.
-             La versión más reciente de JJWT (0.12.x) es compatible con Jakarta EE.
-             Si te encuentras con errores "javax.xml.bind.DatatypeConverter" es por esto.
-             Si no tienes errores con JJWT 0.11.5, puedes ignorar esta sección.
-        -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-csv</artifactId>
+			<version>1.10.0</version> <!-- O la versión más reciente -->
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>

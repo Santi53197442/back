@@ -70,21 +70,21 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authz -> authz
+                        // PERMITIR SOLICITUDES OPTIONS GLOBALMENTE PARA PREFLIGHT
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // <--- AÑADE ESTA LÍNEA
+
                         // Endpoints públicos
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
-                        .requestMatchers("/actuator/**").permitAll() // Permitir acceso a todos los endpoints de Actuator
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/auth/forgot-password").permitAll()
                         .requestMatchers("/auth/reset-password").permitAll()
 
                         // Endpoints de Administrador
-                        // Requieren autenticación y el rol 'ADMINISTRADOR'
-                        // El prefijo "ROLE_" es implícito para hasRole()
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
 
-                        // Endpoints de Usuario Autenticado (cualquier rol autenticado)
+                        // Endpoints de Usuario Autenticado
                         .requestMatchers(HttpMethod.GET, "/api/user/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/user/profile").authenticated()
-                        // Añade aquí otros endpoints que requieran solo autenticación pero no un rol específico
 
                         // Todas las demás solicitudes deben estar autenticadas
                         .anyRequest().authenticated()

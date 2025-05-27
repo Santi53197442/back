@@ -12,6 +12,8 @@ import com.omnibus.backend.model.EstadoBus;
 import com.omnibus.backend.model.Viaje; // Para la respuesta de error en marcarInactivo
 import com.omnibus.backend.service.OmnibusService;
 import com.omnibus.backend.exception.BusConViajesAsignadosException;
+import com.omnibus.backend.model.EstadoViaje; // <--- AÑADIR ESTE IMPORT
+
 
 // Imports para Viaje
 import com.omnibus.backend.service.ViajeService;
@@ -483,6 +485,21 @@ public class VendedorController {
         } catch (Exception e) {
             logger.error("Error interno al reasignar el viaje {}: {}", viajeId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error interno al reasignar el viaje."));
+        }
+    }
+
+    @GetMapping("/viajes/estado")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    public ResponseEntity<List<ViajeResponseDTO>> obtenerViajesPorEstado(@RequestParam("estado") String estadoViajeStr) {
+        try {
+            EstadoViaje estado = EstadoViaje.valueOf(estadoViajeStr.toUpperCase());
+            List<ViajeResponseDTO> viajes = viajeService.obtenerViajesPorEstado(estado); // Necesitarás este método en ViajeService
+            return ResponseEntity.ok(viajes);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(null); // O un mensaje de error
+        } catch (Exception e) {
+            logger.error("Error al obtener viajes por estado: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

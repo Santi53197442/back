@@ -64,4 +64,6 @@ public interface ViajeRepository extends JpaRepository<Viaje, Integer> {
     );
 
     List<Viaje> findByBusAsignado_IdAndEstadoIn(Long busId, List<EstadoViaje> estados);
+
+    List<Viaje> findByEstado(EstadoViaje estado);
 }

@@ -18,8 +18,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class ViajeService {
@@ -411,5 +413,26 @@ public class ViajeService {
         public NoBusDisponibleException(String message) {
             super(message);
         }
+    }
+
+
+    public List<ViajeResponseDTO> obtenerViajesPorEstado(EstadoViaje estado) {
+        logger.info("Buscando viajes con estado: {}", estado);
+        // Necesitas un método en ViajeRepository para buscar por estado.
+        // Ejemplo: List<Viaje> viajesEncontrados = viajeRepository.findByEstado(estado);
+        // Si no lo tienes, tendrás que añadirlo a ViajeRepository.
+        // Por ahora, asumiré que tienes un método así o que lo vas a añadir.
+
+        List<Viaje> viajesEncontrados = viajeRepository.findByEstado(estado); // <--- NECESITARÁS ESTE MÉTODO EN ViajeRepository
+
+        if (viajesEncontrados.isEmpty()) {
+            logger.info("No se encontraron viajes para el estado: {}", estado);
+            return new ArrayList<>();
+        }
+
+        logger.info("Se encontraron {} viajes para el estado: {}", viajesEncontrados.size(), estado);
+        return viajesEncontrados.stream()
+                .map(this::mapToViajeResponseDTO) // Reutiliza tu método de mapeo existente
+                .collect(Collectors.toList());
     }
 }

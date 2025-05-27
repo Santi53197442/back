@@ -16,27 +16,33 @@ import java.util.List;
 @Repository
 public interface ViajeRepository extends JpaRepository<Viaje, Integer> {
 
-    // Existing method (from your code)
     List<Viaje> findByBusAsignadoAndFechaAndHoraSalidaBeforeAndHoraLlegadaAfterAndEstadoIn(
             Omnibus bus,
             LocalDate fecha,
-            LocalTime nuevaHoraLlegada, // This seems to be horaFinViaje
-            LocalTime nuevaHoraSalida,  // This seems to be horaInicioViaje
+            LocalTime horaLlegadaViajeCandidato, // Llegada del viaje que se está evaluando
+            LocalTime horaSalidaViajeCandidato,  // Salida del viaje que se está evaluando
             List<EstadoViaje> estados
     );
 
-    // New method to EXCLUDE a specific Viaje ID
     List<Viaje> findByBusAsignadoAndFechaAndHoraSalidaBeforeAndHoraLlegadaAfterAndEstadoInAndIdNot(
             Omnibus bus,
             LocalDate fecha,
-            LocalTime nuevaHoraLlegada,
-            LocalTime nuevaHoraSalida,
+            LocalTime horaLlegadaViajeCandidato,
+            LocalTime horaSalidaViajeCandidato,
             List<EstadoViaje> estados,
-            Integer id // ID of the Viaje to exclude
+            Integer idViajeExcluir
     );
 
-    // ... (other existing methods from your ViajeRepository)
-    // MÉTODOS EXISTENTES DEL USUARIO (para otras funcionalidades)
+    @Query("SELECT v FROM Viaje v WHERE v.busAsignado.id = :omnibusId " +
+            "AND v.estado IN :estadosConsiderados " +
+            "AND v.fecha >= :fechaDesde AND v.fecha <= :fechaHasta")
+    List<Viaje> findPotentialOverlappingTripsInDateRange(
+            @Param("omnibusId") Long omnibusId,
+            @Param("estadosConsiderados") List<EstadoViaje> estadosConsiderados,
+            @Param("fechaDesde") LocalDate fechaDesde,
+            @Param("fechaHasta") LocalDate fechaHasta
+    );
+
     @Query("SELECT v FROM Viaje v WHERE v.busAsignado = :bus " +
             "AND ((v.fecha = :fechaReferencia AND v.horaSalida > :horaReferencia) OR v.fecha > :fechaReferencia) " +
             "AND v.estado = com.omnibus.backend.model.EstadoViaje.PROGRAMADO " +
@@ -57,7 +63,5 @@ public interface ViajeRepository extends JpaRepository<Viaje, Integer> {
             @Param("horaReferencia") LocalTime horaReferencia
     );
 
-    // NUEVO: Método para encontrar viajes de un bus por su ID y ciertos estados
-    // Útil para otras verificaciones, como al intentar asignar un bus a un nuevo viaje.
     List<Viaje> findByBusAsignado_IdAndEstadoIn(Long busId, List<EstadoViaje> estados);
 }

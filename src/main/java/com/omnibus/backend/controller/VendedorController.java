@@ -432,7 +432,7 @@ public class VendedorController {
     }
 
     // NUEVO ENDPOINT para obtener ómnibus por estado
-    @GetMapping("/por-estado") // ej: /api/omnibus/por-estado?estado=OPERATIVO
+    @GetMapping("/omnibus/por-estado") // ej: /api/omnibus/por-estado?estado=OPERATIVO
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMINISTRADOR')") // Ajusta los roles según necesidad
     public ResponseEntity<List<Omnibus>> obtenerOmnibusPorEstado(@RequestParam("estado") EstadoBus estado) {
         try {

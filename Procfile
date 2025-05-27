@@ -1,1 +1,1 @@
-web: java -Xms64m -Xmx256m -Dserver.port=$PORT -jar target/*.jar
+web: java -Xms300m -Xmx600m -Dserver.port=$PORT -jar target/*.jar

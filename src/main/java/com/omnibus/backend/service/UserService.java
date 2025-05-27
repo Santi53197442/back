@@ -6,16 +6,16 @@ import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.PasswordEncoder; // <-- Necesario para hashear nueva contraseña
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime; // Para la expiración del token
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
-import java.util.UUID; // Para generar tokens únicos
+import java.util.UUID;
 
 @Service
 public class UserService {
@@ -24,10 +24,10 @@ public class UserService {
     private UsuarioRepository usuarioRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder; // <-- Inyectar PasswordEncoder
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private EmailService emailService; // <-- Inyectar EmailService (debes crear esta clase)
+    private EmailService emailService;
 
     public UserProfileDTO getUserProfileByEmail(String email) {
         Usuario usuario = usuarioRepository.findByEmail(email)
@@ -83,14 +83,45 @@ public class UserService {
         return new UserProfileDTO(usuarioGuardado);
     }
 
-    // --- NUEVOS MÉTODOS PARA RECUPERACIÓN DE CONTRASEÑA ---
-
+    // --- MÉTODO PARA CAMBIAR CONTRASEÑA (USUARIO AUTENTICADO) ---
     /**
-     * Inicia el proceso de restablecimiento de contraseña para un usuario.
-     * Genera un token, lo guarda en el usuario y envía un correo electrónico.
+     * Permite a un usuario autenticado cambiar su propia contraseña.
      *
-     * @param email El correo electrónico del usuario que solicita el restablecimiento.
+     * @param email El email del usuario autenticado.
+     * @param currentPassword La contraseña actual proporcionada por el usuario.
+     * @param newPassword La nueva contraseña deseada por el usuario.
+     * @throws UsernameNotFoundException Si el usuario no se encuentra.
+     * @throws IllegalArgumentException Si la contraseña actual es incorrecta o la nueva contraseña no es válida.
      */
+    @Transactional
+    public void changePassword(String email, String currentPassword, String newPassword) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con email: " + email));
+
+        // 1. Verificar la contraseña actual
+        // Usamos getPassword() porque tu clase Usuario lo implementa de UserDetails
+        if (!passwordEncoder.matches(currentPassword, usuario.getPassword())) {
+            throw new IllegalArgumentException("La contraseña actual es incorrecta.");
+        }
+
+        // 2. Opcional: Verificar si la nueva contraseña es igual a la anterior
+        // Usamos getPassword() aquí también
+        if (passwordEncoder.matches(newPassword, usuario.getPassword())) {
+            throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la contraseña actual.");
+        }
+
+        // 3. Codificar y establecer la nueva contraseña
+        usuario.setContrasenia(passwordEncoder.encode(newPassword)); // Usas setContrasenia, eso está bien
+        usuarioRepository.save(usuario);
+
+        // Opcional: podrías enviar un email de notificación de cambio de contraseña aquí.
+        // emailService.sendPasswordChangedNotification(usuario.getEmail());
+    }
+    // --- FIN DEL MÉTODO ---
+
+
+    // --- MÉTODOS PARA RECUPERACIÓN DE CONTRASEÑA (OLVIDÉ MI CONTRASEÑA) ---
+
     @Transactional
     public void requestPasswordReset(String email) {
         Optional<Usuario> usuarioOptional = usuarioRepository.findByEmail(email);
@@ -102,52 +133,38 @@ public class UserService {
             usuario.setResetPasswordTokenExpiryDate(LocalDateTime.now().plusHours(1)); // Token válido por 1 hora
             usuarioRepository.save(usuario);
 
-            // Enviar correo electrónico
             emailService.sendPasswordResetEmail(usuario.getEmail(), token);
-            System.out.println("Solicitud de reseteo para: " + email + " Token: " + token); // Para debug
+            System.out.println("Solicitud de reseteo para: " + email + " Token: " + token);
         } else {
-            // No lanzar error para no revelar si un email existe o no (seguridad).
-            // El controlador debe devolver un mensaje genérico.
             System.out.println("Solicitud de reseteo para email no encontrado (o se maneja silenciosamente): " + email);
         }
     }
 
-    /**
-     * Restablece la contraseña del usuario si el token es válido y no ha expirado.
-     *
-     * @param token El token de restablecimiento.
-     * @param newPassword La nueva contraseña (en texto plano, se hasheará aquí).
-     * @return true si la contraseña se restableció con éxito, false en caso contrario.
-     */
     @Transactional
     public boolean resetPassword(String token, String newPassword) {
         Optional<Usuario> usuarioOptional = usuarioRepository.findByResetPasswordToken(token);
 
         if (usuarioOptional.isEmpty()) {
             System.out.println("Intento de reseteo con token inválido: " + token);
-            return false; // Token no encontrado
+            return false;
         }
 
         Usuario usuario = usuarioOptional.get();
 
         if (usuario.getResetPasswordTokenExpiryDate().isBefore(LocalDateTime.now())) {
-            // Token expirado, limpiarlo para que no se pueda reusar.
             usuario.setResetPasswordToken(null);
             usuario.setResetPasswordTokenExpiryDate(null);
             usuarioRepository.save(usuario);
             System.out.println("Intento de reseteo con token expirado: " + token);
-            return false; // Token expirado
+            return false;
         }
 
-        // Token válido y no expirado
-        usuario.setContrasenia(passwordEncoder.encode(newPassword)); // Hashear la nueva contraseña
-        usuario.setResetPasswordToken(null); // Invalidar el token después de su uso
+        usuario.setContrasenia(passwordEncoder.encode(newPassword));
+        usuario.setResetPasswordToken(null);
         usuario.setResetPasswordTokenExpiryDate(null);
         usuarioRepository.save(usuario);
 
         System.out.println("Contraseña reseteada exitosamente para usuario con token: " + token);
         return true;
     }
-
-    // --- FIN DE NUEVOS MÉTODOS ---
 }

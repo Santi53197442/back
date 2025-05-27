@@ -8,12 +8,12 @@ import com.omnibus.backend.service.LocalidadService;
 
 // Imports para Ómnibus
 import com.omnibus.backend.dto.CreateOmnibusDTO;
-import com.omnibus.backend.dto.MarcarInactivoRequest; // NUEVO DTO
+import com.omnibus.backend.dto.MarcarInactivoRequest;
 import com.omnibus.backend.model.Omnibus;
 import com.omnibus.backend.model.EstadoBus;
-import com.omnibus.backend.model.Viaje; // Para la respuesta de error
+import com.omnibus.backend.model.Viaje; // Para la respuesta de error en marcarInactivo
 import com.omnibus.backend.service.OmnibusService;
-import com.omnibus.backend.exception.BusConViajesAsignadosException; // NUEVA EXCEPCIÓN
+import com.omnibus.backend.exception.BusConViajesAsignadosException;
 
 // Imports para Viaje
 import com.omnibus.backend.dto.ViajeRequestDTO;
@@ -44,7 +44,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+// import java.util.Optional; // No se usa directamente en los métodos mostrados
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -74,7 +74,6 @@ public class VendedorController {
     @PostMapping("/localidades")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaLocalidad(@Valid @RequestBody CreateLocalidadDTO createLocalidadDTO) {
-        // ... (código existente sin cambios)
         try {
             Localidad nuevaLocalidad = localidadService.crearLocalidad(createLocalidadDTO);
             return ResponseEntity.status(HttpStatus.CREATED).body(nuevaLocalidad);
@@ -89,7 +88,6 @@ public class VendedorController {
     @PostMapping("/localidades-batch")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaLocalidadBatch(@RequestParam("file") MultipartFile file) {
-        // ... (código existente sin cambios)
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV no puede estar vacío."));
         }
@@ -108,7 +106,7 @@ public class VendedorController {
                 return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV está vacío o no tiene cabeceras."));
             }
             for (String expectedHeader : expectedHeaders) {
-                if (!headerMap.containsKey(expectedHeader.toLowerCase())) { // toLowerCase para ser indulgente con el case
+                if (!headerMap.containsKey(expectedHeader.toLowerCase())) {
                     return ResponseEntity.badRequest().body(Map.of("message", "Cabecera faltante en el CSV para localidades: " + expectedHeader));
                 }
             }
@@ -119,7 +117,7 @@ public class VendedorController {
                 String nombreLocalidadActual = "N/A";
                 try {
                     dto.setNombre(csvRecord.get("nombre"));
-                    nombreLocalidadActual = dto.getNombre(); // Actualizar después de obtenerlo
+                    nombreLocalidadActual = dto.getNombre();
                     dto.setDepartamento(csvRecord.get("departamento"));
                     dto.setDireccion(csvRecord.get("direccion"));
 
@@ -135,9 +133,9 @@ public class VendedorController {
                     localidadService.crearLocalidad(dto);
                     successMessages.add("Fila " + processedDataRows + ": Localidad '" + dto.getNombre() + "' creada exitosamente.");
 
-                } catch (IllegalArgumentException e) { // Conflicto, nombre duplicado
+                } catch (IllegalArgumentException e) {
                     addLocalidadError(errorMessages, processedDataRows, nombreLocalidadActual, e.getMessage());
-                } catch (Exception e) { // Otros errores inesperados
+                } catch (Exception e) {
                     logger.error("Error procesando fila de datos {} del CSV para localidades: {}", processedDataRows, e.getMessage(), e);
                     addLocalidadError(errorMessages, processedDataRows, nombreLocalidadActual, "Error inesperado: " + e.getMessage());
                 }
@@ -162,7 +160,6 @@ public class VendedorController {
     }
 
     private void addLocalidadError(List<Map<String, String>> errorMessages, int dataRowNum, String nombreLocalidad, String message) {
-        // ... (código existente sin cambios)
         Map<String, String> errorDetail = new HashMap<>();
         errorDetail.put("row", String.valueOf(dataRowNum));
         errorDetail.put("nombreLocalidad", nombreLocalidad != null ? nombreLocalidad : "N/A");
@@ -173,7 +170,6 @@ public class VendedorController {
     @GetMapping("/localidades-disponibles")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<List<Localidad>> listarTodasLasLocalidadesParaSeleccion() {
-        // ... (código existente sin cambios)
         try {
             List<Localidad> localidades = localidadService.obtenerTodasLasLocalidades();
             return ResponseEntity.ok(localidades);
@@ -185,18 +181,16 @@ public class VendedorController {
     // --- Fin Endpoints de Localidad ---
 
 
-    // --- Endpoints de Ómnibus (con adiciones) ---
-    // Ruta base para ómnibus dentro de vendedor: /api/vendedor/omnibus
+    // --- Endpoints de Ómnibus ---
     @PostMapping("/omnibus")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaOmnibus(@Valid @RequestBody CreateOmnibusDTO createOmnibusDTO) {
-        // ... (código existente sin cambios)
         try {
             Omnibus nuevoOmnibus = omnibusService.crearOmnibus(createOmnibusDTO);
             return ResponseEntity.status(HttpStatus.CREATED).body(nuevoOmnibus);
-        } catch (IllegalArgumentException e) { // Para matrícula duplicada
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
-        } catch (EntityNotFoundException e) { // Para localidad no encontrada
+        } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
             logger.error("Error al crear ómnibus por vendedor: {}", e.getMessage(), e);
@@ -208,7 +202,6 @@ public class VendedorController {
     @PostMapping("/omnibus-batch")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaOmnibusBatch(@RequestParam("file") MultipartFile file) {
-        // ... (código existente sin cambios)
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV para ómnibus no puede estar vacío."));
         }
@@ -276,9 +269,9 @@ public class VendedorController {
                     omnibusService.crearOmnibus(dto);
                     successMessages.add("Fila " + processedDataRows + ": Ómnibus con matrícula '" + dto.getMatricula() + "' creado exitosamente.");
 
-                } catch (IllegalArgumentException e) { // Matrícula duplicada
+                } catch (IllegalArgumentException e) {
                     addOmnibusError(errorMessages, processedDataRows, matriculaActual, e.getMessage());
-                } catch (EntityNotFoundException e) { // Localidad no encontrada
+                } catch (EntityNotFoundException e) {
                     addOmnibusError(errorMessages, processedDataRows, matriculaActual, e.getMessage());
                 } catch (Exception e) {
                     logger.error("Error procesando fila de datos {} del CSV para ómnibus (matrícula {}): {}",
@@ -306,7 +299,6 @@ public class VendedorController {
     }
 
     private void addOmnibusError(List<Map<String, String>> errorMessages, int dataRowNum, String matricula, String message) {
-        // ... (código existente sin cambios)
         Map<String, String> errorDetail = new HashMap<>();
         errorDetail.put("row", String.valueOf(dataRowNum));
         errorDetail.put("matricula", matricula != null ? matricula : "N/A");
@@ -314,8 +306,8 @@ public class VendedorController {
         errorMessages.add(errorDetail);
     }
 
-    @GetMapping("/omnibusListar") // Mantengo tu endpoint existente para listar
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')") // ADMIN también debería poder listar
+    @GetMapping("/omnibusListar")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<List<Omnibus>> listarTodosLosOmnibus() {
         try {
             List<Omnibus> omnibusLista = omnibusService.obtenerTodosLosOmnibus();
@@ -326,7 +318,8 @@ public class VendedorController {
         }
     }
 
-    // --- NUEVOS ENDPOINTS PARA GESTIONAR ESTADO DE ÓMNIBUS ---
+    // --- GESTIÓN DE ESTADO DE ÓMNIBUS ---
+
     @PutMapping("/omnibus/{id}/marcar-inactivo")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> marcarOmnibusInactivo(
@@ -345,10 +338,9 @@ public class VendedorController {
             return ResponseEntity.ok(omnibusActualizado);
         } catch (BusConViajesAsignadosException e) {
             logger.warn("Conflicto al marcar ómnibus {} inactivo: {}", id, e.getMessage());
-            // Devuelve los viajes conflictivos para que el frontend pueda mostrarlos
             Map<String, Object> errorBody = new HashMap<>();
             errorBody.put("message", e.getMessage());
-            errorBody.put("viajesConflictivos", e.getViajesConflictivos()); // Podrías mapear a DTOs si es necesario
+            errorBody.put("viajesConflictivos", e.getViajesConflictivos());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody);
         } catch (EntityNotFoundException e) {
             logger.warn("No se pudo marcar ómnibus inactivo. No encontrado: {}", e.getMessage());
@@ -362,23 +354,64 @@ public class VendedorController {
         }
     }
 
+    // --- FUNCIÓN PARA MARCAR UN ÓMNIBUS COMO OPERATIVO ---
+    // Esta función se usa para cambiar el estado de un ómnibus (por ejemplo, uno INACTIVO) a OPERATIVO.
     @PutMapping("/omnibus/{id}/marcar-operativo")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> marcarOmnibusOperativo(@PathVariable Long id) {
         try {
             logger.info("Solicitud para marcar ómnibus {} como OPERATIVO.", id);
             Omnibus omnibusActualizado = omnibusService.marcarOmnibusOperativo(id);
-            logger.info("Ómnibus {} marcado como OPERATIVO exitosamente.", id);
+            logger.info("Ómnibus {} marcado como OPERATIVO exitosamente. Estado anterior: {}, Nuevo estado: {}",
+                    id, omnibusActualizado.getEstado() /* Esto mostrará OPERATIVO */, EstadoBus.OPERATIVO);
             return ResponseEntity.ok(omnibusActualizado);
         } catch (EntityNotFoundException e) {
-            logger.warn("No se pudo marcar ómnibus operativo. No encontrado: {}", e.getMessage());
+            logger.warn("No se pudo marcar ómnibus {} operativo. No encontrado: {}", id, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
-        } catch (IllegalStateException e) { // Por ej. si intentas marcar operativo un bus ASIGNADO_A_VIAJE
-            logger.warn("No se pudo marcar ómnibus {} operativo. Estado ilegal: {}", id, e.getMessage());
+        } catch (IllegalStateException e) { // Ej: si el bus ya es OPERATIVO o está ASIGNADO_A_VIAJE
+            logger.warn("No se pudo marcar ómnibus {} operativo. Condición no permitida: {}", id, e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
             logger.error("Error interno al marcar ómnibus {} operativo: {}", id, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error interno al procesar la solicitud."));
+        }
+    }
+
+    // --- FUNCIÓN PARA OBTENER ÓMNIBUS POR ESTADO ---
+    // Esta función se usa para listar ómnibus, por ejemplo, todos los que están INACTIVO.
+    // El frontend llamaría a: /api/vendedor/omnibus/por-estado?estado=INACTIVO
+    @GetMapping("/omnibus/por-estado")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    public ResponseEntity<?> obtenerOmnibusPorEstado(@RequestParam("estado") String estadoStr) {
+        try {
+            EstadoBus estado;
+            try {
+                estado = EstadoBus.valueOf(estadoStr.toUpperCase()); // Case-insensitive
+            } catch (IllegalArgumentException e) {
+                logger.warn("Estado de búsqueda de ómnibus inválido: '{}'. Valores permitidos: {}", estadoStr, java.util.Arrays.toString(EstadoBus.values()));
+                Map<String, Object> errorBody = new HashMap<>();
+                errorBody.put("message", "Valor para 'estado' inválido: " + estadoStr + ".");
+                errorBody.put("allowedValues", java.util.Arrays.stream(EstadoBus.values())
+                        .map(Enum::name)
+                        .collect(Collectors.toList()));
+                return ResponseEntity.badRequest().body(errorBody);
+            }
+
+            logger.info("Solicitud para obtener ómnibus por estado: {}", estado);
+            List<Omnibus> omnibusLista = omnibusService.obtenerOmnibusPorEstado(estado);
+
+            if (omnibusLista.isEmpty()) {
+                logger.info("No se encontraron ómnibus con estado {}", estado);
+                return ResponseEntity.noContent().build(); // 204 No Content
+            }
+
+            logger.info("Encontrados {} ómnibus con estado {}", omnibusLista.size(), estado);
+            return ResponseEntity.ok(omnibusLista);
+
+        } catch (Exception e) {
+            logger.error("Error interno al listar ómnibus por estado '{}': {}", estadoStr, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno del servidor al procesar la solicitud."));
         }
     }
     // --- Fin Endpoints de Ómnibus ---
@@ -388,7 +421,6 @@ public class VendedorController {
     @PostMapping("/viajes")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaViaje(@Valid @RequestBody ViajeRequestDTO viajeRequestDTO) {
-        // ... (código existente sin cambios)
         try {
             logger.info("Recibida solicitud para crear viaje: Fecha={}, OrigenId={}, DestinoId={}",
                     viajeRequestDTO.getFecha(), viajeRequestDTO.getOrigenId(), viajeRequestDTO.getDestinoId());
@@ -413,7 +445,6 @@ public class VendedorController {
     @PostMapping("/viajes/{viajeId}/finalizar")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> finalizarViaje(@PathVariable Integer viajeId) {
-        // ... (código existente sin cambios)
         try {
             logger.info("Recibida solicitud para finalizar viaje con ID: {}", viajeId);
             viajeService.finalizarViaje(viajeId);
@@ -428,24 +459,6 @@ public class VendedorController {
         } catch (Exception e) {
             logger.error("Error interno al finalizar el viaje {}: {}", viajeId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error interno al finalizar el viaje."));
-        }
-    }
-
-    // NUEVO ENDPOINT para obtener ómnibus por estado
-    @GetMapping("/omnibus/por-estado") // ej: /api/omnibus/por-estado?estado=OPERATIVO
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMINISTRADOR')") // Ajusta los roles según necesidad
-    public ResponseEntity<List<Omnibus>> obtenerOmnibusPorEstado(@RequestParam("estado") EstadoBus estado) {
-        try {
-            // Necesitarás un nuevo método en OmnibusService y OmnibusRepository
-            List<Omnibus> omnibusLista = omnibusService.obtenerOmnibusPorEstado(estado);
-            if (omnibusLista.isEmpty()) {
-                // Puedes devolver 204 No Content o 200 OK con lista vacía
-                return ResponseEntity.noContent().build();
-            }
-            return ResponseEntity.ok(omnibusLista);
-        } catch (Exception e) {
-            logger.error("Error al listar ómnibus por estado {}: {}", estado, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     // --- Fin Endpoints de Viaje ---

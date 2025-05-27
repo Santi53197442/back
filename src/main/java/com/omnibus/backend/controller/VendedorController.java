@@ -2,13 +2,11 @@
 package com.omnibus.backend.controller;
 
 // Imports para Localidad
-import com.omnibus.backend.dto.CreateLocalidadDTO;
+import com.omnibus.backend.dto.*;
 import com.omnibus.backend.model.Localidad;
 import com.omnibus.backend.service.LocalidadService;
 
 // Imports para Ómnibus
-import com.omnibus.backend.dto.CreateOmnibusDTO;
-import com.omnibus.backend.dto.MarcarInactivoRequest;
 import com.omnibus.backend.model.Omnibus;
 import com.omnibus.backend.model.EstadoBus;
 import com.omnibus.backend.model.Viaje; // Para la respuesta de error en marcarInactivo
@@ -16,8 +14,6 @@ import com.omnibus.backend.service.OmnibusService;
 import com.omnibus.backend.exception.BusConViajesAsignadosException;
 
 // Imports para Viaje
-import com.omnibus.backend.dto.ViajeRequestDTO;
-import com.omnibus.backend.dto.ViajeResponseDTO;
 import com.omnibus.backend.service.ViajeService;
 
 // Imports comunes y de validación/CSV
@@ -461,5 +457,34 @@ public class VendedorController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error interno al finalizar el viaje."));
         }
     }
+
+    @PutMapping("/viajes/{viajeId}/reasignar")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    public ResponseEntity<?> reasignarViajeAOmnibus(
+            @PathVariable Integer viajeId,
+            @Valid @RequestBody ReasignarViajeRequestDTO reasignarRequest) {
+        try {
+            logger.info("Solicitud para reasignar viaje ID {} al ómnibus ID {}", viajeId, reasignarRequest.getNuevoOmnibusId());
+            ViajeResponseDTO viajeActualizado = viajeService.reasignarViaje(viajeId, reasignarRequest.getNuevoOmnibusId());
+            logger.info("Viaje ID {} reasignado exitosamente al ómnibus ID {}", viajeId, reasignarRequest.getNuevoOmnibusId());
+            return ResponseEntity.ok(viajeActualizado);
+        } catch (EntityNotFoundException e) {
+            logger.warn("No se pudo reasignar el viaje. Entidad no encontrada: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            logger.warn("No se pudo reasignar el viaje. Argumento inválido: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            logger.warn("No se pudo reasignar el viaje. Estado ilegal: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (ViajeService.NoBusDisponibleException e) { // Captura específica para esta condición
+            logger.warn("No se pudo reasignar el viaje. No hay bus disponible o hay conflicto: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error interno al reasignar el viaje {}: {}", viajeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Error interno al reasignar el viaje."));
+        }
+    }
+
     // --- Fin Endpoints de Viaje ---
 }

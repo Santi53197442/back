@@ -2,12 +2,14 @@
 package com.omnibus.backend.service;
 
 import com.omnibus.backend.dto.CreateOmnibusDTO;
-import com.omnibus.backend.exception.BusConViajesAsignadosException; // Importar la excepción
-import com.omnibus.backend.model.*; // Importar EstadoBus, EstadoViaje
+import com.omnibus.backend.exception.BusConViajesAsignadosException;
+import com.omnibus.backend.model.*;
 import com.omnibus.backend.repository.LocalidadRepository;
 import com.omnibus.backend.repository.OmnibusRepository;
-import com.omnibus.backend.repository.ViajeRepository; // Importar ViajeRepository
+import com.omnibus.backend.repository.ViajeRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +23,15 @@ import java.util.Optional;
 @Service
 public class OmnibusService {
 
+    private static final Logger logger = LoggerFactory.getLogger(OmnibusService.class);
     private final OmnibusRepository omnibusRepository;
     private final LocalidadRepository localidadRepository;
-    private final ViajeRepository viajeRepository; // Inyectar ViajeRepository
+    private final ViajeRepository viajeRepository;
 
     @Autowired
     public OmnibusService(OmnibusRepository omnibusRepository,
                           LocalidadRepository localidadRepository,
-                          ViajeRepository viajeRepository) { // Añadir al constructor
+                          ViajeRepository viajeRepository) {
         this.omnibusRepository = omnibusRepository;
         this.localidadRepository = localidadRepository;
         this.viajeRepository = viajeRepository;
@@ -62,10 +65,9 @@ public class OmnibusService {
         return omnibusRepository.findById(id);
     }
 
-    // --- NUEVOS MÉTODOS PARA MARCAR INACTIVO/OPERATIVO ---
-
     @Transactional
     public Omnibus marcarOmnibusInactivo(Long omnibusId, LocalDateTime inicioInactividad, LocalDateTime finInactividad, EstadoBus nuevoEstado) {
+        logger.info("Intentando marcar ómnibus {} como {} de {} a {}", omnibusId, nuevoEstado, inicioInactividad, finInactividad);
         if (nuevoEstado != EstadoBus.EN_MANTENIMIENTO && nuevoEstado != EstadoBus.FUERA_DE_SERVICIO) {
             throw new IllegalArgumentException("El nuevo estado para inactividad debe ser EN_MANTENIMIENTO o FUERA_DE_SERVICIO.");
         }
@@ -77,49 +79,51 @@ public class OmnibusService {
                 .orElseThrow(() -> new EntityNotFoundException("Ómnibus no encontrado con ID: " + omnibusId));
 
         if (omnibus.getEstado() == nuevoEstado) {
-            // Opcional: si ya está en ese estado, se podría considerar una operación noop o lanzar error.
-            // Por ahora, permitimos reafirmar el estado, pero no se realizarán cambios si es el mismo.
+            logger.warn("Ómnibus {} ya está en estado {}. No se realizan cambios.", omnibusId, nuevoEstado);
+            return omnibus;
         }
-        if (omnibus.getEstado() == EstadoBus.ASIGNADO_A_VIAJE && inicioInactividad.isBefore(LocalDateTime.now().plusMinutes(1))) {
-            throw new BusConViajesAsignadosException("El ómnibus está actualmente ASIGNADO_A_VIAJE y no puede marcarse inactivo inmediatamente si la inactividad es inminente.");
+        if (omnibus.getEstado() == EstadoBus.ASIGNADO_A_VIAJE) {
+            throw new BusConViajesAsignadosException("El ómnibus está actualmente ASIGNADO_A_VIAJE y no puede marcarse inactivo directamente. Considere finalizar o reasignar sus viajes.");
         }
 
         List<EstadoViaje> estadosConsiderados = List.of(EstadoViaje.PROGRAMADO, EstadoViaje.EN_CURSO);
-        LocalDate fechaConsultaDesde = inicioInactividad.toLocalDate().minusDays(1); // Margen para viajes que cruzan medianoche
-        LocalDate fechaConsultaHasta = finInactividad.toLocalDate().plusDays(1);   // Margen para viajes que cruzan medianoche
+        LocalDate fechaConsultaDesde = inicioInactividad.toLocalDate();
+        LocalDate fechaConsultaHasta = finInactividad.toLocalDate();
 
         List<Viaje> viajesPotenciales = viajeRepository.findPotentialOverlappingTripsInDateRange(
                 omnibusId, estadosConsiderados, fechaConsultaDesde, fechaConsultaHasta
         );
+        logger.debug("Encontrados {} viajes potenciales para ómnibus {} en el rango de fechas {} a {}",
+                viajesPotenciales.size(), omnibusId, fechaConsultaDesde, fechaConsultaHasta);
 
         List<Viaje> viajesConflictivos = new ArrayList<>();
         for (Viaje viaje : viajesPotenciales) {
             LocalDateTime inicioViaje = LocalDateTime.of(viaje.getFecha(), viaje.getHoraSalida());
             LocalDateTime finViaje;
-            if (viaje.getHoraLlegada().isBefore(viaje.getHoraSalida())) { // Viaje cruza medianoche
+            if (viaje.getHoraLlegada().isBefore(viaje.getHoraSalida())) {
                 finViaje = LocalDateTime.of(viaje.getFecha().plusDays(1), viaje.getHoraLlegada());
             } else {
                 finViaje = LocalDateTime.of(viaje.getFecha(), viaje.getHoraLlegada());
             }
-
-            // Lógica de solapamiento: (StartA < EndB) && (EndA > StartB)
             if (inicioViaje.isBefore(finInactividad) && finViaje.isAfter(inicioInactividad)) {
+                logger.debug("Conflicto detectado: Viaje ID {} ({}-{}) con periodo de inactividad ({}-{})",
+                        viaje.getId(), inicioViaje, finViaje, inicioInactividad, finInactividad);
                 viajesConflictivos.add(viaje);
             }
         }
 
         if (!viajesConflictivos.isEmpty()) {
+            logger.warn("Ómnibus {} tiene {} viajes conflictivos con el periodo de inactividad.", omnibusId, viajesConflictivos.size());
             throw new BusConViajesAsignadosException(
                     "El ómnibus tiene " + viajesConflictivos.size() +
-                            " viaje(s) (" + EstadoViaje.PROGRAMADO + "/" + EstadoViaje.EN_CURSO +
-                            ") que se solapan con el período de inactividad [" + inicioInactividad + " - " + finInactividad + "].",
+                            " viaje(s) (" + EstadoViaje.PROGRAMADO.name() + "/" + EstadoViaje.EN_CURSO.name() +
+                            ") que se solapan con el período de inactividad solicitado [" + inicioInactividad + " - " + finInactividad + "].",
                     viajesConflictivos
             );
         }
 
+        logger.info("No hay conflictos. Marcando ómnibus {} como {}.", omnibusId, nuevoEstado);
         omnibus.setEstado(nuevoEstado);
-        // Aquí NO guardamos el período de inactividad en el ómnibus. Solo cambiamos su estado actual.
-        // La gestión de cuándo volverá a estar OPERATIVO es un proceso separado.
         return omnibusRepository.save(omnibus);
     }
 
@@ -129,17 +133,14 @@ public class OmnibusService {
                 .orElseThrow(() -> new EntityNotFoundException("Ómnibus no encontrado con ID: " + omnibusId));
 
         if (omnibus.getEstado() == EstadoBus.OPERATIVO) {
-            // Ya está operativo, no hacer nada o retornar mensaje.
+            logger.warn("Ómnibus {} ya está OPERATIVO.", omnibusId);
             return omnibus;
         }
         if (omnibus.getEstado() == EstadoBus.ASIGNADO_A_VIAJE) {
-            throw new IllegalStateException("No se puede marcar como OPERATIVO un bus que está ASIGNADO_A_VIAJE. Debe finalizar o cancelar el viaje primero.");
+            throw new IllegalStateException("No se puede marcar como OPERATIVO un bus que está ASIGNADO_A_VIAJE. Debe finalizar o reasignar sus viajes primero.");
         }
-        // Aquí podrías añadir lógica para verificar si el bus tenía un "período de mantenimiento"
-        // y si ya ha concluido, si tuvieras esa información almacenada.
-        // Por ahora, es un cambio manual.
-
         omnibus.setEstado(EstadoBus.OPERATIVO);
+        logger.info("Ómnibus {} marcado como OPERATIVO.", omnibusId);
         return omnibusRepository.save(omnibus);
     }
 

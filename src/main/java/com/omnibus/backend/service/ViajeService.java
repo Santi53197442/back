@@ -159,16 +159,18 @@ public class ViajeService {
         nuevoViaje.setOrigen(origenNuevoViaje);
         nuevoViaje.setDestino(destinoNuevoViaje);
         nuevoViaje.setBusAsignado(busSeleccionado);
-        nuevoViaje.setAsientosDisponibles(busSeleccionado.getCapacidadAsientos()); // Inicialmente todos disponibles
+        nuevoViaje.setAsientosDisponibles(busSeleccionado.getCapacidadAsientos());
         nuevoViaje.setEstado(EstadoViaje.PROGRAMADO);
-        // nuevoViaje.setPrecio(requestDTO.getPrecio()); // Si ViajeRequestDTO tiene precio y Viaje también
+        nuevoViaje.setPrecio(requestDTO.getPrecio()); // <--- ESTA LÍNEA ES CLAVE. Asegúrate que exista y esté activa.
 
-        busSeleccionado.setEstado(EstadoBus.ASIGNADO_A_VIAJE); // O el estado que corresponda
+        busSeleccionado.setEstado(EstadoBus.ASIGNADO_A_VIAJE);
         omnibusRepository.save(busSeleccionado);
 
         Viaje viajeGuardado = viajeRepository.save(nuevoViaje);
-        logger.info("Viaje creado ID: {}. Bus asignado: {}", viajeGuardado.getId(), busSeleccionado.getMatricula());
-        return mapToViajeResponseDTO(viajeGuardado);
+        // Actualizar el log para incluir el precio si quieres
+        logger.info("Viaje creado ID: {}. Precio: {}. Bus asignado: {}",
+                viajeGuardado.getId(), viajeGuardado.getPrecio(), busSeleccionado.getMatricula());
+        return mapToViajeResponseDTO(viajeGuardado); // Asegúrate que mapToViajeResponseDTO también incluya el precio si es necesario en la respuesta inmediata.
     }
 
     @Transactional

@@ -2,23 +2,17 @@
 package com.omnibus.backend.controller;
 
 // Imports para Localidad
-import com.omnibus.backend.dto.CreateLocalidadDTO;
+import com.omnibus.backend.dto.*;
 import com.omnibus.backend.model.Localidad;
 import com.omnibus.backend.service.LocalidadService;
 
 // Imports para Ómnibus
-import com.omnibus.backend.dto.CreateOmnibusDTO;
-import com.omnibus.backend.dto.MarcarInactivoRequest;
 import com.omnibus.backend.model.Omnibus;
 import com.omnibus.backend.model.EstadoBus;
 import com.omnibus.backend.service.OmnibusService;
 import com.omnibus.backend.exception.BusConViajesAsignadosException;
 
 // Imports para Viaje
-import com.omnibus.backend.dto.BusquedaViajesOmnibusDTO; // NUEVO
-import com.omnibus.backend.dto.ReasignarViajeRequestDTO;
-import com.omnibus.backend.dto.ViajeRequestDTO;
-import com.omnibus.backend.dto.ViajeResponseDTO;
 import com.omnibus.backend.model.EstadoViaje; // IMPORTANTE
 import com.omnibus.backend.service.ViajeService;
 
@@ -494,6 +488,35 @@ public class VendedorController {
             logger.error("Error interno al listar viajes del ómnibus {}: {}", omnibusId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Error interno al procesar la solicitud de viajes del ómnibus."));
+        }
+    }
+
+
+    @GetMapping("/viajes/buscar-disponibles")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')") // El cliente también podría necesitar esto
+    public ResponseEntity<?> buscarViajesConDisponibilidad(
+            @Valid @ModelAttribute BusquedaViajesGeneralDTO criteriosBusqueda) { // Usar @ModelAttribute para GET con múltiples params
+        try {
+            logger.info("Iniciando búsqueda de viajes con disponibilidad. Criterios: {}", criteriosBusqueda);
+            List<ViajeConDisponibilidadDTO> viajes = viajeService.buscarViajesConDisponibilidad(criteriosBusqueda);
+
+            if (viajes.isEmpty()) {
+                logger.info("No se encontraron viajes con los criterios especificados.");
+                // Devolver 204 No Content o 200 OK con lista vacía, según preferencia.
+                // 200 OK con lista vacía es a menudo más fácil para los clientes.
+                return ResponseEntity.ok(new ArrayList<>());
+            }
+
+            logger.info("Encontrados {} viajes con disponibilidad.", viajes.size());
+            return ResponseEntity.ok(viajes);
+        } catch (IllegalArgumentException e) {
+            // Esto podría ser lanzado por validaciones en el DTO o en el servicio
+            logger.warn("Argumentos inválidos para la búsqueda de viajes: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error interno al buscar viajes con disponibilidad: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno del servidor al procesar la búsqueda de viajes."));
         }
     }
 }

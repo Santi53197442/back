@@ -2,43 +2,58 @@
 package com.omnibus.backend.model;
 
 import jakarta.persistence.*;
-import java.util.Objects; // Para hashCode e equals
+import jakarta.validation.constraints.Min; // Para validar numeroAsiento
+import jakarta.validation.constraints.NotNull; // Para validar numeroAsiento
+import java.util.Objects;
 
 @Entity
-@Table(name = "pasajes") // Nombre de la tabla en la base de datos
+@Table(name = "pasajes")
 public class Pasaje {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @ManyToOne(fetch = FetchType.LAZY) // Usar LAZY para no cargar el cliente a menos que se necesite
-    @JoinColumn(name = "cliente_id", nullable = false) // Asume que tienes una entidad Usuario y una columna cliente_id
+    @NotNull(message = "El cliente no puede ser nulo para un pasaje.")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_id", nullable = false)
     private Usuario cliente;
 
+    @NotNull(message = "El precio del pasaje no puede ser nulo.")
     @Column(nullable = false)
-    private Float precio;
+    private Float precio; // Considera usar Double para consistencia con Viaje.precio
 
+    @NotNull(message = "El estado del pasaje no puede ser nulo.")
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50) // Especificar longitud
     private EstadoPasaje estado;
 
-    @ManyToOne(fetch = FetchType.LAZY) // Usar LAZY para no cargar el viaje a menos que se necesite
-    @JoinColumn(name = "viaje_id", nullable = false) // FK a la tabla de Viaje
-    private Viaje datosViaje; // Nombre del campo como en tu imagen
+    @NotNull(message = "El viaje asociado al pasaje no puede ser nulo.")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "viaje_id", nullable = false)
+    private Viaje datosViaje;
+
+    // --- NUEVO CAMPO PARA EL NÚMERO DE ASIENTO ---
+    @NotNull(message = "El número de asiento no puede ser nulo.")
+    @Min(value = 1, message = "El número de asiento debe ser al menos 1.")
+    @Column(name = "numero_asiento", nullable = false)
+    private Integer numeroAsiento;
 
     // Constructores
     public Pasaje() {
     }
 
-    public Pasaje(Usuario cliente, Float precio, EstadoPasaje estado, Viaje datosViaje) {
+    // Constructor actualizado para incluir numeroAsiento
+    public Pasaje(Usuario cliente, Float precio, EstadoPasaje estado, Viaje datosViaje, Integer numeroAsiento) {
         this.cliente = cliente;
         this.precio = precio;
         this.estado = estado;
         this.datosViaje = datosViaje;
+        this.numeroAsiento = numeroAsiento;
     }
 
-    // Getters y Setters
+    // Getters y Setters (Lombok también podría generar estos si añades @Getter @Setter a la clase)
+
     public Integer getId() {
         return id;
     }
@@ -79,7 +94,15 @@ public class Pasaje {
         this.datosViaje = datosViaje;
     }
 
-    // Es buena práctica implementar equals y hashCode
+    // --- GETTER Y SETTER PARA numeroAsiento ---
+    public Integer getNumeroAsiento() {
+        return numeroAsiento;
+    }
+
+    public void setNumeroAsiento(Integer numeroAsiento) {
+        this.numeroAsiento = numeroAsiento;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -97,10 +120,11 @@ public class Pasaje {
     public String toString() {
         return "Pasaje{" +
                 "id=" + id +
-                ", clienteId=" + (cliente != null ? cliente.getId() : "null") + // Evitar NRE y toString() recursivo
+                ", clienteId=" + (cliente != null ? cliente.getId() : "null") +
                 ", precio=" + precio +
                 ", estado=" + estado +
-                ", viajeId=" + (datosViaje != null ? datosViaje.getId() : "null") + // Evitar NRE y toString() recursivo
+                ", viajeId=" + (datosViaje != null ? datosViaje.getId() : "null") +
+                ", numeroAsiento=" + numeroAsiento + // Añadido al toString
                 '}';
     }
 }

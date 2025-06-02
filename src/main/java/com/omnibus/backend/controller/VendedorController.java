@@ -519,4 +519,25 @@ public class VendedorController {
                     .body(Map.of("message", "Error interno del servidor al procesar la búsqueda de viajes."));
         }
     }
+
+
+    @GetMapping("/viajes/{viajeId}/detalles-asientos")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')") // Permitir a roles relevantes
+    public ResponseEntity<?> obtenerDetallesViajeConAsientos(@PathVariable Integer viajeId) {
+        try {
+            logger.info("Solicitud de detalles y asientos para el viaje ID: {}", viajeId);
+            ViajeDetalleConAsientosDTO detalles = viajeService.obtenerDetallesViajeParaSeleccionAsientos(viajeId);
+            return ResponseEntity.ok(detalles);
+        } catch (EntityNotFoundException e) {
+            logger.warn("Viaje no encontrado al obtener detalles y asientos: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            logger.warn("Estado ilegal al obtener detalles y asientos para el viaje {}: {}", viajeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error interno al obtener detalles y asientos del viaje {}: {}", viajeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al obtener los detalles del viaje y asientos."));
+        }
+    }
 }

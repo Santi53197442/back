@@ -26,4 +26,7 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> { // ID
     // Podrías necesitar otros métodos, por ejemplo:
     // List<Pasaje> findByDatosViaje(Viaje datosViaje);
     // List<Pasaje> findByCliente(Usuario cliente);
+
+
+    List<Pasaje> findByDatosViajeAndEstadoIn(Viaje datosViaje, List<EstadoPasaje> estados);
 }

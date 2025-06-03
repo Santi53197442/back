@@ -2,12 +2,12 @@
 package com.omnibus.backend.model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Min; // Para validar numeroAsiento
-import jakarta.validation.constraints.NotNull; // Para validar numeroAsiento
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import java.util.Objects;
 
 @Entity
-@Table(name = "pasajes")
+@Table(name = "pasajes") // Nombre de la tabla en la base de datos
 public class Pasaje {
 
     @Id
@@ -17,23 +17,22 @@ public class Pasaje {
     @NotNull(message = "El cliente no puede ser nulo para un pasaje.")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cliente_id", nullable = false)
-    private Usuario cliente;
+    private Usuario cliente; // Asumo que tienes una entidad Usuario
 
     @NotNull(message = "El precio del pasaje no puede ser nulo.")
     @Column(nullable = false)
-    private Float precio; // Considera usar Double para consistencia con Viaje.precio
+    private Double precio; // Usar Double para consistencia con Viaje.precio
 
     @NotNull(message = "El estado del pasaje no puede ser nulo.")
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50) // Especificar longitud
-    private EstadoPasaje estado;
+    @Column(nullable = false, length = 50)
+    private EstadoPasaje estado; // Tu enum EstadoPasaje (VENDIDO, RESERVADO, etc.)
 
     @NotNull(message = "El viaje asociado al pasaje no puede ser nulo.")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "viaje_id", nullable = false)
-    private Viaje datosViaje;
+    private Viaje datosViaje; // Tu entidad Viaje
 
-    // --- NUEVO CAMPO PARA EL NÚMERO DE ASIENTO ---
     @NotNull(message = "El número de asiento no puede ser nulo.")
     @Min(value = 1, message = "El número de asiento debe ser al menos 1.")
     @Column(name = "numero_asiento", nullable = false)
@@ -43,8 +42,8 @@ public class Pasaje {
     public Pasaje() {
     }
 
-    // Constructor actualizado para incluir numeroAsiento
-    public Pasaje(Usuario cliente, Float precio, EstadoPasaje estado, Viaje datosViaje, Integer numeroAsiento) {
+    // Constructor útil para la creación en el servicio
+    public Pasaje(Usuario cliente, Double precio, EstadoPasaje estado, Viaje datosViaje, Integer numeroAsiento) {
         this.cliente = cliente;
         this.precio = precio;
         this.estado = estado;
@@ -52,8 +51,7 @@ public class Pasaje {
         this.numeroAsiento = numeroAsiento;
     }
 
-    // Getters y Setters (Lombok también podría generar estos si añades @Getter @Setter a la clase)
-
+    // Getters y Setters
     public Integer getId() {
         return id;
     }
@@ -70,11 +68,11 @@ public class Pasaje {
         this.cliente = cliente;
     }
 
-    public Float getPrecio() {
+    public Double getPrecio() {
         return precio;
     }
 
-    public void setPrecio(Float precio) {
+    public void setPrecio(Double precio) {
         this.precio = precio;
     }
 
@@ -94,7 +92,6 @@ public class Pasaje {
         this.datosViaje = datosViaje;
     }
 
-    // --- GETTER Y SETTER PARA numeroAsiento ---
     public Integer getNumeroAsiento() {
         return numeroAsiento;
     }
@@ -124,7 +121,7 @@ public class Pasaje {
                 ", precio=" + precio +
                 ", estado=" + estado +
                 ", viajeId=" + (datosViaje != null ? datosViaje.getId() : "null") +
-                ", numeroAsiento=" + numeroAsiento + // Añadido al toString
+                ", numeroAsiento=" + numeroAsiento +
                 '}';
     }
 }

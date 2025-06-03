@@ -13,8 +13,12 @@ import com.omnibus.backend.service.OmnibusService;
 import com.omnibus.backend.exception.BusConViajesAsignadosException;
 
 // Imports para Viaje
-import com.omnibus.backend.model.EstadoViaje; // IMPORTANTE
+import com.omnibus.backend.model.EstadoViaje;
 import com.omnibus.backend.service.ViajeService;
+
+// Imports para Pasaje  // <--- CORREGIR IMPORT
+import com.omnibus.backend.service.pasajeService;
+
 
 // Imports comunes y de validación/CSV
 import jakarta.persistence.EntityNotFoundException;
@@ -53,16 +57,19 @@ public class VendedorController {
     private final OmnibusService omnibusService;
     private final ViajeService viajeService;
     private final Validator validator;
+    private final pasajeService pasajeService; // <--- AÑADIR LA DECLARACIÓN DEL CAMPO
 
     @Autowired
     public VendedorController(LocalidadService localidadService,
                               OmnibusService omnibusService,
                               ViajeService viajeService,
-                              Validator validator) {
+                              Validator validator,
+                              pasajeService pasajeService) { // <--- AÑADIR PasajeService COMO PARÁMETRO
         this.localidadService = localidadService;
         this.omnibusService = omnibusService;
         this.viajeService = viajeService;
         this.validator = validator;
+        this.pasajeService = pasajeService; // <--- AÑADIR LA ASIGNACIÓN
     }
 
     // --- Endpoints de Localidad ---
@@ -165,7 +172,7 @@ public class VendedorController {
     }
 
     // --- Endpoints de Ómnibus ---
-    // ... (tu código existente de ómnibus) ...
+    // ... (código de ómnibus) ...
     @PostMapping("/omnibus")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaOmnibus(@Valid @RequestBody CreateOmnibusDTO createOmnibusDTO) {
@@ -199,7 +206,14 @@ public class VendedorController {
                 return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV de ómnibus está vacío o no tiene cabeceras."));
             }
             for (String expectedHeader : expectedHeaders) {
-                if (!headerMap.containsKey(expectedHeader)) {
+                // CORRECCIÓN: chequear headerMap.containsKey(expectedHeader.toLowerCase()) si los headers en el CSV podrían estar en minúsculas
+                // o headerMap.containsKey(expectedHeader) si deben ser exactos (sensible a mayúsculas/minúsculas)
+                // El .withIgnoreHeaderCase() en CSVFormat debería manejar esto, pero una doble verificación no hace daño o simplificar.
+                // Si se usa withIgnoreHeaderCase, el headerMap las claves ya estarán en minúsculas (o como las normalice CSVFormat).
+                // El código original para omnibus-batch usaba `headerMap.containsKey(expectedHeader)`
+                // mientras que para localidades-batch usaba `headerMap.containsKey(expectedHeader.toLowerCase())`
+                // Es mejor ser consistente. Asumiré que withIgnoreHeaderCase funciona y el headerMap tiene claves normalizadas.
+                if (!headerMap.containsKey(expectedHeader)) { // Asumiendo que las claves en headerMap ya están normalizadas por withIgnoreHeaderCase
                     return ResponseEntity.badRequest().body(Map.of("message", "Cabecera faltante en el CSV para ómnibus: " + expectedHeader));
                 }
             }
@@ -322,7 +336,7 @@ public class VendedorController {
             logger.info("Solicitud para marcar ómnibus {} como OPERATIVO.", id);
             Omnibus omnibusActualizado = omnibusService.marcarOmnibusOperativo(id);
             logger.info("Ómnibus {} marcado como OPERATIVO exitosamente. Estado anterior: {}, Nuevo estado: {}",
-                    id, omnibusActualizado.getEstado(), EstadoBus.OPERATIVO); // Se asume que el servicio lo cambia a OPERATIVO
+                    id, omnibusActualizado.getEstado(), EstadoBus.OPERATIVO);
             return ResponseEntity.ok(omnibusActualizado);
         } catch (EntityNotFoundException e) {
             logger.warn("No se pudo marcar ómnibus {} operativo. No encontrado: {}", id, e.getMessage());
@@ -355,7 +369,7 @@ public class VendedorController {
             List<Omnibus> omnibusLista = omnibusService.obtenerOmnibusPorEstado(estado);
             if (omnibusLista.isEmpty()) {
                 logger.info("No se encontraron ómnibus con estado {}", estado);
-                return ResponseEntity.ok(new ArrayList<Omnibus>()); // Devolver lista vacía con OK
+                return ResponseEntity.ok(new ArrayList<Omnibus>());
             }
             logger.info("Encontrados {} ómnibus con estado {}", omnibusLista.size(), estado);
             return ResponseEntity.ok(omnibusLista);
@@ -366,7 +380,9 @@ public class VendedorController {
         }
     }
 
+
     // --- Endpoints de Viaje ---
+    // ... (código de viaje) ...
     @PostMapping("/viajes")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
     public ResponseEntity<?> altaViaje(@Valid @RequestBody ViajeRequestDTO viajeRequestDTO) {
@@ -478,8 +494,6 @@ public class VendedorController {
         try {
             logger.info("Solicitud para listar viajes del ómnibus ID {} con criterios: {}", omnibusId, busquedaDTO.toString());
             List<ViajeResponseDTO> viajes = viajeService.buscarViajesDeOmnibus(omnibusId, busquedaDTO);
-            // No es necesario verificar si la lista está vacía aquí, el servicio ya lo hace y devuelve lista vacía.
-            // El frontend interpretará una lista vacía como "sin resultados".
             return ResponseEntity.ok(viajes);
         } catch (EntityNotFoundException e) {
             logger.warn("No se pudieron listar viajes. Entidad no encontrada: {}", e.getMessage());
@@ -493,24 +507,21 @@ public class VendedorController {
 
 
     @GetMapping("/viajes/buscar-disponibles")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')") // El cliente también podría necesitar esto
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')")
     public ResponseEntity<?> buscarViajesConDisponibilidad(
-            @Valid @ModelAttribute BusquedaViajesGeneralDTO criteriosBusqueda) { // Usar @ModelAttribute para GET con múltiples params
+            @Valid @ModelAttribute BusquedaViajesGeneralDTO criteriosBusqueda) {
         try {
             logger.info("Iniciando búsqueda de viajes con disponibilidad. Criterios: {}", criteriosBusqueda);
             List<ViajeConDisponibilidadDTO> viajes = viajeService.buscarViajesConDisponibilidad(criteriosBusqueda);
 
             if (viajes.isEmpty()) {
                 logger.info("No se encontraron viajes con los criterios especificados.");
-                // Devolver 204 No Content o 200 OK con lista vacía, según preferencia.
-                // 200 OK con lista vacía es a menudo más fácil para los clientes.
                 return ResponseEntity.ok(new ArrayList<>());
             }
 
             logger.info("Encontrados {} viajes con disponibilidad.", viajes.size());
             return ResponseEntity.ok(viajes);
         } catch (IllegalArgumentException e) {
-            // Esto podría ser lanzado por validaciones en el DTO o en el servicio
             logger.warn("Argumentos inválidos para la búsqueda de viajes: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
@@ -522,7 +533,7 @@ public class VendedorController {
 
 
     @GetMapping("/viajes/{viajeId}/detalles-asientos")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')") // Permitir a roles relevantes
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')")
     public ResponseEntity<?> obtenerDetallesViajeConAsientos(@PathVariable Integer viajeId) {
         try {
             logger.info("Solicitud de detalles y asientos para el viaje ID: {}", viajeId);
@@ -538,6 +549,53 @@ public class VendedorController {
             logger.error("Error interno al obtener detalles y asientos del viaje {}: {}", viajeId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Error interno al obtener los detalles del viaje y asientos."));
+        }
+    }
+
+
+    // --- NUEVOS ENDPOINTS PARA PASAJES ---
+
+    @PostMapping("/pasajes/comprar")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    public ResponseEntity<?> comprarPasaje(@Valid @RequestBody CompraPasajeRequestDTO compraRequestDTO) {
+        try {
+            logger.info("API: Solicitud de compra de pasaje: Viaje ID {}, Cliente ID {}, Asiento {}",
+                    compraRequestDTO.getViajeId(), compraRequestDTO.getClienteId(), compraRequestDTO.getNumeroAsiento());
+            // Ahora pasajeService debería estar inicializado
+            PasajeResponseDTO pasajeComprado = this.pasajeService.comprarPasaje(compraRequestDTO);
+            logger.info("API: Pasaje comprado exitosamente con ID: {}", pasajeComprado.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(pasajeComprado);
+        } catch (EntityNotFoundException e) {
+            logger.warn("API: Error en compra de pasaje. Entidad no encontrada: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            logger.warn("API: Error en compra de pasaje. Condición inválida: {}", e.getMessage());
+            if (e instanceof IllegalArgumentException) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+            }
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("API: Error interno al comprar pasaje: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al procesar la compra del pasaje."));
+        }
+    }
+
+    @GetMapping("/viajes/{viajeId}/asientos-ocupados")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')")
+    public ResponseEntity<?> obtenerAsientosOcupados(@PathVariable Integer viajeId) {
+        try {
+            logger.info("API: Solicitud para obtener asientos ocupados del viaje ID: {}", viajeId);
+            // Ahora pasajeService debería estar inicializado
+            List<Integer> asientosOcupados = this.pasajeService.obtenerAsientosOcupados(viajeId);
+            return ResponseEntity.ok(asientosOcupados);
+        } catch (EntityNotFoundException e) {
+            logger.warn("API: Viaje no encontrado al obtener asientos ocupados (ID {}): {}", viajeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("API: Error interno al obtener asientos ocupados del viaje {}: {}", viajeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al obtener los asientos ocupados."));
         }
     }
 }

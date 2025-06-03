@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PasajeRepository extends JpaRepository<Pasaje, Integer> { // ID es Integer
@@ -29,4 +30,8 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> { // ID
 
 
     List<Pasaje> findByDatosViajeAndEstadoIn(Viaje datosViaje, List<EstadoPasaje> estados);
+
+    List<Pasaje> findByDatosViajeId(Integer viajeId);
+
+    Optional<Pasaje> findByDatosViajeAndNumeroAsiento(Viaje viaje, Integer numeroAsiento);
 }

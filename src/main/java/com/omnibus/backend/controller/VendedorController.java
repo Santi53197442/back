@@ -16,7 +16,7 @@ import com.omnibus.backend.exception.BusConViajesAsignadosException;
 import com.omnibus.backend.model.EstadoViaje;
 import com.omnibus.backend.service.ViajeService;
 
-// Imports para Pasaje  // <--- CORREGIR IMPORT
+// Imports para Pasaje
 import com.omnibus.backend.service.pasajeService;
 
 
@@ -48,7 +48,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/vendedor")
+@RequestMapping("/api/vendedor") // Nota: La ruta base sigue siendo /vendedor
 public class VendedorController {
 
     private static final Logger logger = LoggerFactory.getLogger(VendedorController.class);
@@ -57,25 +57,24 @@ public class VendedorController {
     private final OmnibusService omnibusService;
     private final ViajeService viajeService;
     private final Validator validator;
-    private final pasajeService pasajeService; // <--- AÑADIR LA DECLARACIÓN DEL CAMPO
+    private final pasajeService pasajeService;
 
     @Autowired
     public VendedorController(LocalidadService localidadService,
                               OmnibusService omnibusService,
                               ViajeService viajeService,
                               Validator validator,
-                              pasajeService pasajeService) { // <--- AÑADIR PasajeService COMO PARÁMETRO
+                              pasajeService pasajeService) {
         this.localidadService = localidadService;
         this.omnibusService = omnibusService;
         this.viajeService = viajeService;
         this.validator = validator;
-        this.pasajeService = pasajeService; // <--- AÑADIR LA ASIGNACIÓN
+        this.pasajeService = pasajeService;
     }
 
     // --- Endpoints de Localidad ---
-    // ... (tu código existente de localidades) ...
     @PostMapping("/localidades")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> altaLocalidad(@Valid @RequestBody CreateLocalidadDTO createLocalidadDTO) {
         try {
             Localidad nuevaLocalidad = localidadService.crearLocalidad(createLocalidadDTO);
@@ -89,7 +88,7 @@ public class VendedorController {
     }
 
     @PostMapping("/localidades-batch")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> altaLocalidadBatch(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV no puede estar vacío."));
@@ -160,21 +159,20 @@ public class VendedorController {
         errorMessages.add(errorDetail);
     }
     @GetMapping("/localidades-disponibles")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<List<Localidad>> listarTodasLasLocalidadesParaSeleccion() {
         try {
             List<Localidad> localidades = localidadService.obtenerTodasLasLocalidades();
             return ResponseEntity.ok(localidades);
         } catch (Exception e) {
-            logger.error("Error al listar localidades disponibles para el vendedor: {}", e.getMessage(), e);
+            logger.error("Error al listar localidades disponibles: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     // --- Endpoints de Ómnibus ---
-    // ... (código de ómnibus) ...
     @PostMapping("/omnibus")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> altaOmnibus(@Valid @RequestBody CreateOmnibusDTO createOmnibusDTO) {
         try {
             Omnibus nuevoOmnibus = omnibusService.crearOmnibus(createOmnibusDTO);
@@ -189,7 +187,7 @@ public class VendedorController {
         }
     }
     @PostMapping("/omnibus-batch")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> altaOmnibusBatch(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV para ómnibus no puede estar vacío."));
@@ -206,14 +204,7 @@ public class VendedorController {
                 return ResponseEntity.badRequest().body(Map.of("message", "El archivo CSV de ómnibus está vacío o no tiene cabeceras."));
             }
             for (String expectedHeader : expectedHeaders) {
-                // CORRECCIÓN: chequear headerMap.containsKey(expectedHeader.toLowerCase()) si los headers en el CSV podrían estar en minúsculas
-                // o headerMap.containsKey(expectedHeader) si deben ser exactos (sensible a mayúsculas/minúsculas)
-                // El .withIgnoreHeaderCase() en CSVFormat debería manejar esto, pero una doble verificación no hace daño o simplificar.
-                // Si se usa withIgnoreHeaderCase, el headerMap las claves ya estarán en minúsculas (o como las normalice CSVFormat).
-                // El código original para omnibus-batch usaba `headerMap.containsKey(expectedHeader)`
-                // mientras que para localidades-batch usaba `headerMap.containsKey(expectedHeader.toLowerCase())`
-                // Es mejor ser consistente. Asumiré que withIgnoreHeaderCase funciona y el headerMap tiene claves normalizadas.
-                if (!headerMap.containsKey(expectedHeader)) { // Asumiendo que las claves en headerMap ya están normalizadas por withIgnoreHeaderCase
+                if (!headerMap.containsKey(expectedHeader)) {
                     return ResponseEntity.badRequest().body(Map.of("message", "Cabecera faltante en el CSV para ómnibus: " + expectedHeader));
                 }
             }
@@ -286,7 +277,7 @@ public class VendedorController {
         errorMessages.add(errorDetail);
     }
     @GetMapping("/omnibusListar")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<List<Omnibus>> listarTodosLosOmnibus() {
         try {
             List<Omnibus> omnibusLista = omnibusService.obtenerTodosLosOmnibus();
@@ -297,7 +288,7 @@ public class VendedorController {
         }
     }
     @PutMapping("/omnibus/{id}/marcar-inactivo")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> marcarOmnibusInactivo(
             @PathVariable Long id,
             @Valid @RequestBody MarcarInactivoRequest request) {
@@ -330,7 +321,7 @@ public class VendedorController {
         }
     }
     @PutMapping("/omnibus/{id}/marcar-operativo")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> marcarOmnibusOperativo(@PathVariable Long id) {
         try {
             logger.info("Solicitud para marcar ómnibus {} como OPERATIVO.", id);
@@ -350,7 +341,7 @@ public class VendedorController {
         }
     }
     @GetMapping("/omnibus/por-estado")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> obtenerOmnibusPorEstado(@RequestParam("estado") String estadoStr) {
         try {
             EstadoBus estado;
@@ -382,9 +373,8 @@ public class VendedorController {
 
 
     // --- Endpoints de Viaje ---
-    // ... (código de viaje) ...
     @PostMapping("/viajes")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> altaViaje(@Valid @RequestBody ViajeRequestDTO viajeRequestDTO) {
         try {
             logger.info("Recibida solicitud para crear viaje: Fecha={}, OrigenId={}, DestinoId={}",
@@ -408,7 +398,7 @@ public class VendedorController {
     }
 
     @PostMapping("/viajes/{viajeId}/finalizar")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> finalizarViaje(@PathVariable Integer viajeId) {
         try {
             logger.info("Recibida solicitud para finalizar viaje con ID: {}", viajeId);
@@ -428,7 +418,7 @@ public class VendedorController {
     }
 
     @PutMapping("/viajes/{viajeId}/reasignar")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> reasignarViajeAOmnibus(
             @PathVariable Integer viajeId,
             @Valid @RequestBody ReasignarViajeRequestDTO reasignarRequest) {
@@ -456,7 +446,7 @@ public class VendedorController {
     }
 
     @GetMapping("/viajes/estado")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> obtenerViajesPorEstado(@RequestParam("estado") String estadoViajeStr) {
         try {
             EstadoViaje estado;
@@ -487,7 +477,7 @@ public class VendedorController {
     }
 
     @GetMapping("/omnibus/{omnibusId}/viajes")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR')")
     public ResponseEntity<?> listarViajesDeOmnibus(
             @PathVariable Long omnibusId,
             @Valid @ModelAttribute BusquedaViajesOmnibusDTO busquedaDTO) {
@@ -507,7 +497,7 @@ public class VendedorController {
 
 
     @GetMapping("/viajes/buscar-disponibles")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<?> buscarViajesConDisponibilidad(
             @Valid @ModelAttribute BusquedaViajesGeneralDTO criteriosBusqueda) {
         try {
@@ -533,7 +523,7 @@ public class VendedorController {
 
 
     @GetMapping("/viajes/{viajeId}/detalles-asientos")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<?> obtenerDetallesViajeConAsientos(@PathVariable Integer viajeId) {
         try {
             logger.info("Solicitud de detalles y asientos para el viaje ID: {}", viajeId);
@@ -556,12 +546,16 @@ public class VendedorController {
     // --- NUEVOS ENDPOINTS PARA PASAJES ---
 
     @PostMapping("/pasajes/comprar")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<?> comprarPasaje(@Valid @RequestBody CompraPasajeRequestDTO compraRequestDTO) {
         try {
             logger.info("API: Solicitud de compra de pasaje: Viaje ID {}, Cliente ID {}, Asiento {}",
                     compraRequestDTO.getViajeId(), compraRequestDTO.getClienteId(), compraRequestDTO.getNumeroAsiento());
-            // Ahora pasajeService debería estar inicializado
+            // Aquí, si el rol es CLIENTE, idealmente el clienteId debería ser el del usuario autenticado.
+            // Podrías añadir lógica aquí para obtener el clienteId del Principal si el rol es CLIENTE
+            // y verificar que coincida con el compraRequestDTO.getClienteId() o usar el del Principal directamente.
+            // Por ahora, la lógica del servicio `comprarPasaje` manejará la validación del `clienteId` como esté implementada.
+
             PasajeResponseDTO pasajeComprado = this.pasajeService.comprarPasaje(compraRequestDTO);
             logger.info("API: Pasaje comprado exitosamente con ID: {}", pasajeComprado.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(pasajeComprado);
@@ -582,11 +576,10 @@ public class VendedorController {
     }
 
     @GetMapping("/viajes/{viajeId}/asientos-ocupados")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('ADMIN') or hasRole('CLIENTE')")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<?> obtenerAsientosOcupados(@PathVariable Integer viajeId) {
         try {
             logger.info("API: Solicitud para obtener asientos ocupados del viaje ID: {}", viajeId);
-            // Ahora pasajeService debería estar inicializado
             List<Integer> asientosOcupados = this.pasajeService.obtenerAsientosOcupados(viajeId);
             return ResponseEntity.ok(asientosOcupados);
         } catch (EntityNotFoundException e) {

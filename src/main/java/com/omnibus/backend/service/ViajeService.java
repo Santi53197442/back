@@ -492,9 +492,10 @@ public class ViajeService {
                 .origenNombre(viaje.getOrigen().getNombre())
                 .destinoNombre(viaje.getDestino().getNombre())
                 .precio(viaje.getPrecio())
-                .estado(viaje.getEstado())
+                .estado(viaje.getEstado()) // Pasando el Enum directamente
                 .omnibusMatricula(omnibus.getMatricula())
                 .capacidadOmnibus(omnibus.getCapacidadAsientos())
+                .asientosDisponibles(viaje.getAsientosDisponibles()) // <-- POBLAR EL NUEVO CAMPO
                 .numerosAsientoOcupados(numerosAsientoOcupados)
                 .build();
     }

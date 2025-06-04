@@ -1,3 +1,4 @@
+// src/main/java/com/omnibus/backend/config/SecurityConfig.java
 package com.omnibus.backend.config;
 
 import com.omnibus.backend.security.JwtRequestFilter;
@@ -24,7 +25,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true) // Habilita @PreAuthorize, etc.
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
     @Autowired
@@ -44,71 +45,65 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
-                "http://localhost:3000", // Desarrollo local
-                "https://frontend-eosin-eight-41.vercel.app", // Reemplaza con tus URLs de Vercel reales
+                "http://localhost:3000",
+                "https://frontend-eosin-eight-41.vercel.app",
                 "https://frontend-pjqhx2c7u-santi53197442s-projects.vercel.app",
                 "https://frontend-git-master-santi53197442s-projects.vercel.app",
                 "https://frontend-4f1xmt5az-santi53197442s-projects.vercel.app",
                 "https://frontend-kndjuqyhd-santi53197442s-projects.vercel.app"
-                // Añade cualquier otra URL de producción aquí
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("*")); // Para producción, considera ser más específico (ej: "Authorization", "Content-Type")
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        // configuration.setMaxAge(3600L); // Opcional: cuánto tiempo el navegador puede cachear la respuesta preflight
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration); // Aplica esta configuración CORS a todas las rutas
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Aplica la configuración CORS definida arriba
-                .csrf(csrf -> csrf.disable()) // Deshabilita CSRF ya que se usa JWT (stateless)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authz -> authz
-                        // PERMITIR SOLICITUDES OPTIONS GLOBALMENTE (importante para CORS preflight)
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // Endpoints públicos (no requieren autenticación)
+                        // --- PÚBLICO Y OPCIONES ---
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight CORS
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/actuator/**").permitAll() // Para health checks, etc. (considera restringir en producción)
+                        .requestMatchers("/actuator/**").permitAll() // Considera seguridad en producción
                         .requestMatchers("/api/auth/forgot-password").permitAll()
                         .requestMatchers("/api/auth/reset-password").permitAll()
 
-                        // Endpoints de Administrador
-                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR") // Solo usuarios con rol ADMINISTRADOR
+                        // --- ENDPOINTS ACCESIBLES POR CLIENTES, VENDEDORES Y ADMINS (DENTRO DE /api/vendedor) ---
+                        // Estas reglas específicas deben ir ANTES de la regla general para /api/vendedor/**
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles")
+                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/buscar-disponibles")
+                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/detalles-asientos") // El * es un comodín para el ID del viaje
+                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/asientos-ocupados")
+                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.POST, "/api/vendedor/pasajes/comprar") // Compra de pasaje
+                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR") // Asegúrate que la lógica de servicio lo maneje bien
 
-                        // --- INICIO DE LA SECCIÓN MODIFICADA PARA VENDEDOR/CLIENTE/ADMIN ---
-                        // Regla específica para el endpoint de detalles-asientos:
-                        // Debe ir ANTES de la regla general para /api/vendedor/**
-                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/detalles-asientos")
-                        .hasAnyRole("VENDEDOR", "ADMINISTRADOR", "CLIENTE") // Usuarios con cualquiera de estos roles
+                        // --- ENDPOINTS DE ADMINISTRADOR ---
+                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
 
-                        // Endpoints generales de Vendedor (lo que queda bajo /api/vendedor/**):
-                        // Esta regla se aplica si la anterior más específica no coincidió.
-                        // Ajusta los roles aquí según sea necesario.
-                        // Si la mayoría de las otras rutas /api/vendedor/* son solo para VENDEDOR, usa .hasRole("VENDEDOR")
-                        // Si los ADMIN también pueden acceder a todo lo de VENDEDOR, usa .hasAnyRole("VENDEDOR", "ADMINISTRADOR")
+                        // --- ENDPOINTS DE VENDEDOR (LO RESTANTE BAJO /api/vendedor) ---
+                        // Esta regla se aplica a cualquier otra ruta bajo /api/vendedor que no haya coincidido antes
                         .requestMatchers("/api/vendedor/**").hasAnyRole("VENDEDOR", "ADMINISTRADOR")
-                        // --- FIN DE LA SECCIÓN MODIFICADA ---
 
-                        // Endpoints de Cliente (si tienes rutas específicas para clientes fuera de /api/vendedor)
-                        // Ejemplo: .requestMatchers("/api/cliente/**").hasRole("CLIENTE")
-
-                        // Endpoints de Usuario Autenticado (genéricos, para cualquier usuario logueado)
+                        // --- ENDPOINTS DE USUARIO AUTENTICADO (GENÉRICOS) ---
                         .requestMatchers(HttpMethod.GET, "/api/user/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/user/profile").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/user/password").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/user/ci/*").authenticated() // Para buscarClientePorCI
 
                         // Todas las demás solicitudes no especificadas arriba deben estar autenticadas
                         .anyRequest().authenticated()
                 )
-                // Configuración de sesión: STATELESS ya que se usa JWT
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // Añade el filtro JWT antes del filtro de autenticación estándar de Spring
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

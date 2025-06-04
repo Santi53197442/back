@@ -546,7 +546,7 @@ public class VendedorController {
     // --- NUEVOS ENDPOINTS PARA PASAJES ---
 
     @PostMapping("/pasajes/comprar")
-    @PreAuthorize("hasAuthority('CLIENTE') or hasAuthority('VENDEDOR') or hasAuthority('ADMINISTRADOR')")
+   // @PreAuthorize("hasAuthority('CLIENTE') or hasAuthority('VENDEDOR') or hasAuthority('ADMINISTRADOR')")
     public ResponseEntity<?> comprarPasaje(@Valid @RequestBody CompraPasajeRequestDTO compraRequestDTO) {
         try {
             logger.info("API: Solicitud de compra de pasaje: Viaje ID {}, Cliente ID {}, Asiento {}",

@@ -11,4 +11,6 @@ import java.util.Optional;
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> { // Se mantiene Usuario
     Optional<Usuario> findByEmail(String email); // Devolverá instancias de Usuario (Cliente, Vendedor, etc.)
     Optional<Usuario> findByResetPasswordToken(String token);
+    Optional<Usuario> findByCi(String ci);
+
 }

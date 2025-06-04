@@ -4,18 +4,19 @@ package com.omnibus.backend.model;
 import jakarta.persistence.Entity;
 import jakarta.persistence.PrimaryKeyJoinColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient; // <-- IMPORTAR @Transient
 // import jakarta.persistence.Column; // Si añades campos específicos
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.time.LocalDate;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Collections; // O List.of() para Java 9+
 
 @Entity
-@Table(name = "clientes_data") // Nombre de tabla diferente para datos específicos de cliente
-@PrimaryKeyJoinColumn(name = "usuario_id") // FK a la tabla 'usuarios' (la de la clase base)
-public class Cliente extends Usuario { // Extiende de Usuario
+@Table(name = "clientes_data")
+@PrimaryKeyJoinColumn(name = "usuario_id")
+public class Cliente extends Usuario {
 
     // @Column(name = "puntos_fidelidad")
     // private Integer puntosFidelidad;
@@ -35,7 +36,10 @@ public class Cliente extends Usuario { // Extiende de Usuario
     // public void setPuntosFidelidad(Integer puntosFidelidad) { this.puntosFidelidad = puntosFidelidad; }
 
     @Override
+    @Transient // <--- AÑADIR ESTA ANOTACIÓN
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority(RoleType.CLIENTE.getAuthority())); // Usando el Enum RoleType
+        // Devuelve el rol ROLE_CLIENTE para la seguridad
+        return Collections.singletonList(new SimpleGrantedAuthority(RoleType.CLIENTE.getAuthority()));
+        // O si usas Java 9+: return List.of(new SimpleGrantedAuthority(RoleType.CLIENTE.getAuthority()));
     }
 }

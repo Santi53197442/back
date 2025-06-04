@@ -101,12 +101,9 @@ public class AuthController {
         final UserDetails userDetails = userDetailsService.loadUserByUsername(dto.email);
         final String token = jwtUtil.generateToken(userDetails);
 
-        // userDetails ya es una instancia de Cliente, Vendedor o Administrador.
-        // Lo casteamos a Usuario (clase base) para acceder a campos comunes.
-        Usuario usuarioAutenticado = (Usuario) userDetails;
+        Usuario usuarioAutenticado = (Usuario) userDetails; // Tu clase base Usuario DEBE tener un método getId()
 
-        String rolParaFrontend = "desconocido"; // Rol por defecto
-        // Determinar el rol basado en el tipo de instancia
+        String rolParaFrontend = "desconocido";
         if (usuarioAutenticado instanceof Administrador) {
             rolParaFrontend = "administrador";
         } else if (usuarioAutenticado instanceof Vendedor) {
@@ -114,19 +111,20 @@ public class AuthController {
         } else if (usuarioAutenticado instanceof Cliente) {
             rolParaFrontend = "cliente";
         }
-        // Alternativamente, podrías obtenerlo de userDetails.getAuthorities() si solo hay un rol
-        // y formatearlo, pero instanceof es más directo si el tipo de clase define el rol principal.
 
+        // --- CAMBIO AQUÍ para incluir el ID ---
         return ResponseEntity.ok(new AuthResponseDTO(
                 token,
+                usuarioAutenticado.getId(), // <<<--- AÑADIR ESTO
                 usuarioAutenticado.getEmail(),
-                rolParaFrontend, // String del rol determinado
+                rolParaFrontend,
                 usuarioAutenticado.getNombre(),
                 usuarioAutenticado.getApellido(),
                 usuarioAutenticado.getCi() != null ? String.valueOf(usuarioAutenticado.getCi()) : "",
                 usuarioAutenticado.getTelefono() != null ? String.valueOf(usuarioAutenticado.getTelefono()) : "",
                 usuarioAutenticado.getFechaNac() != null ? usuarioAutenticado.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : ""
         ));
+        // ------------------------------------
     }
 
     // Endpoints de forgot-password y reset-password se mantienen igual

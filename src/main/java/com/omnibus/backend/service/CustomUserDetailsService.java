@@ -18,6 +18,8 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con email: " + email));
+        // Log para verificar qué tipo de objeto y qué autoridades tiene
+        System.out.println("CustomUserDetailsService: Cargado usuario tipo: " + usuario.getClass().getName() + " con autoridades: " + usuario.getAuthorities());
         return usuario; // Usuario ya implementa UserDetails
     }
 }

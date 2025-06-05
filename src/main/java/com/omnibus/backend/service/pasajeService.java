@@ -11,14 +11,18 @@ import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class pasajeService { // Nombre de clase corregido a PascalCase
@@ -196,5 +200,98 @@ public class pasajeService { // Nombre de clase corregido a PascalCase
                 pasaje.getEstado(),
                 pasaje.getNumeroAsiento()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<PasajeResponseDTO> obtenerPasajesPorViajeConFiltros(
+            Integer viajeId,
+            Optional<String> clienteNombreOpt,
+            Optional<Integer> numeroAsientoOpt,
+            Optional<String> estadoPasajeOpt, // String para que sea más flexible desde el request param
+            Optional<String> sortByOpt,
+            Optional<String> sortDirOpt
+    ) {
+        logger.info("Buscando pasajes para viaje ID: {} con filtros", viajeId);
+
+        // 1. Validar que el viaje exista
+        if (!viajeRepository.existsById(viajeId)) {
+            logger.warn("Viaje no encontrado con ID: {} al buscar sus pasajes.", viajeId);
+            throw new EntityNotFoundException("Viaje no encontrado con ID: " + viajeId);
+        }
+
+        // 2. Obtener todos los pasajes para ese viaje
+        List<Pasaje> pasajesDelViaje = pasajeRepository.findByDatosViajeId(viajeId);
+
+        if (pasajesDelViaje.isEmpty()) {
+            logger.info("No se encontraron pasajes para el viaje ID: {}", viajeId);
+            return Collections.emptyList();
+        }
+
+        // 3. Aplicar filtros en memoria
+        Stream<Pasaje> pasajesStream = pasajesDelViaje.stream();
+
+        if (clienteNombreOpt.isPresent() && !clienteNombreOpt.get().isBlank()) {
+            String nombreFiltro = clienteNombreOpt.get().toLowerCase();
+            pasajesStream = pasajesStream.filter(p -> p.getCliente() != null &&
+                    p.getCliente().getNombre() != null &&
+                    p.getCliente().getNombre().toLowerCase().contains(nombreFiltro));
+        }
+
+        if (numeroAsientoOpt.isPresent()) {
+            Integer asientoFiltro = numeroAsientoOpt.get();
+            pasajesStream = pasajesStream.filter(p -> p.getNumeroAsiento() != null &&
+                    p.getNumeroAsiento().equals(asientoFiltro));
+        }
+
+        if (estadoPasajeOpt.isPresent() && !estadoPasajeOpt.get().isBlank()) {
+            try {
+                EstadoPasaje estadoFiltro = EstadoPasaje.valueOf(estadoPasajeOpt.get().toUpperCase());
+                pasajesStream = pasajesStream.filter(p -> p.getEstado() == estadoFiltro);
+            } catch (IllegalArgumentException e) {
+                logger.warn("Estado de pasaje inválido para filtro: '{}'. Se ignorará el filtro de estado.", estadoPasajeOpt.get());
+                // No se filtra por estado si es inválido, o podrías lanzar una Bad Request Exception
+            }
+        }
+
+        List<Pasaje> pasajesFiltrados = pasajesStream.collect(Collectors.toList());
+
+        // 4. Aplicar ordenamiento en memoria
+        if (sortByOpt.isPresent() && !sortByOpt.get().isBlank()) {
+            String sortBy = sortByOpt.get();
+            Sort.Direction direction = sortDirOpt.map(dir -> "desc".equalsIgnoreCase(dir) ? Sort.Direction.DESC : Sort.Direction.ASC)
+                    .orElse(Sort.Direction.ASC); // ASC por defecto
+
+            Comparator<Pasaje> comparator = null;
+            switch (sortBy.toLowerCase()) {
+                case "clientenombre":
+                    comparator = Comparator.comparing(p -> p.getCliente() != null ? p.getCliente().getNombre().toLowerCase() : "", Comparator.nullsLast(String::compareTo));
+                    break;
+                case "numeroasiento":
+                    comparator = Comparator.comparing(Pasaje::getNumeroAsiento, Comparator.nullsLast(Integer::compareTo));
+                    break;
+                case "precio":
+                    comparator = Comparator.comparing(Pasaje::getPrecio, Comparator.nullsLast(Double::compareTo));
+                    break;
+                case "estadopasaje":
+                    comparator = Comparator.comparing(p -> p.getEstado() != null ? p.getEstado().name() : "", Comparator.nullsLast(String::compareTo));
+                    break;
+                // Añadir más campos si es necesario
+                default:
+                    logger.warn("Campo de ordenamiento no reconocido: '{}'. No se aplicará ordenamiento.", sortBy);
+            }
+
+            if (comparator != null) {
+                if (direction == Sort.Direction.DESC) {
+                    comparator = comparator.reversed();
+                }
+                pasajesFiltrados.sort(comparator);
+            }
+        }
+
+
+        logger.info("Encontrados {} pasajes para el viaje ID {} después de filtros y ordenamiento.", pasajesFiltrados.size(), viajeId);
+        return pasajesFiltrados.stream()
+                .map(this::convertirAPasajeResponseDTO)
+                .collect(Collectors.toList());
     }
 }

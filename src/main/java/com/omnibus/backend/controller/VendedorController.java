@@ -40,11 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -589,6 +585,49 @@ public class VendedorController {
             logger.error("API: Error interno al obtener asientos ocupados del viaje {}: {}", viajeId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Error interno al obtener los asientos ocupados."));
+        }
+    }
+
+    @GetMapping("/viajes/{viajeId}/pasajes")
+    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')")
+    public ResponseEntity<?> listarPasajesDeViaje(
+            @PathVariable Integer viajeId,
+            @RequestParam(required = false) String clienteNombre,
+            @RequestParam(required = false) Integer numeroAsiento,
+            @RequestParam(required = false) String estadoPasaje, // Ej: VENDIDO, CANCELADO
+            @RequestParam(required = false, defaultValue = "numeroAsiento") String sortBy, // Campo por defecto para ordenar
+            @RequestParam(required = false, defaultValue = "asc") String sortDir // Dirección: asc o desc
+    ) {
+        try {
+            logger.info("API: Solicitud para listar pasajes del viaje ID {} con filtros: clienteNombre={}, numeroAsiento={}, estadoPasaje={}, sortBy={}, sortDir={}",
+                    viajeId, clienteNombre, numeroAsiento, estadoPasaje, sortBy, sortDir);
+
+            List<PasajeResponseDTO> pasajes = pasajeService.obtenerPasajesPorViajeConFiltros(
+                    viajeId,
+                    Optional.ofNullable(clienteNombre),
+                    Optional.ofNullable(numeroAsiento),
+                    Optional.ofNullable(estadoPasaje),
+                    Optional.ofNullable(sortBy),
+                    Optional.ofNullable(sortDir)
+            );
+
+            if (pasajes.isEmpty()) {
+                // Devolver OK con lista vacía si no hay pasajes o no coinciden filtros
+                return ResponseEntity.ok(Collections.emptyList());
+            }
+
+            return ResponseEntity.ok(pasajes);
+
+        } catch (EntityNotFoundException e) {
+            logger.warn("API: Entidad no encontrada al listar pasajes del viaje {}: {}", viajeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalArgumentException e) { // Podría ser por un sortBy/sortDir inválido si no se maneja en servicio
+            logger.warn("API: Argumento inválido al listar pasajes del viaje {}: {}", viajeId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("API: Error interno al listar pasajes del viaje {}: {}", viajeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al procesar la solicitud de listado de pasajes."));
         }
     }
 }

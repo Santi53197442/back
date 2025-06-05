@@ -34,4 +34,6 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> { // ID
     List<Pasaje> findByDatosViajeId(Integer viajeId);
 
     Optional<Pasaje> findByDatosViajeAndNumeroAsiento(Viaje viaje, Integer numeroAsiento);
+
+    List<Pasaje> findByClienteId(Long clienteId);
 }

@@ -84,7 +84,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/asientos-ocupados")
                         .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.POST, "/api/vendedor/pasajes/comprar")
-                        .hasAnyAuthority("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
 
                         // --- ENDPOINTS DE ADMINISTRADOR ---
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")

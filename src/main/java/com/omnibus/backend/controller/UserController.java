@@ -148,4 +148,5 @@ public class UserController {
                     .body("No se encontró cliente con CI: " + ciTrimmed + ".");
         }
     }
+
 }

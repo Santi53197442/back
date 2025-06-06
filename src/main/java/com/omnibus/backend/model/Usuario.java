@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "usuarios") // Mantenemos el nombre de tabla original para la clase base
@@ -45,6 +46,10 @@ public abstract class Usuario implements UserDetails { // Clase abstracta
     @Column(name = "reset_password_token_expiry_date")
     private LocalDateTime resetPasswordTokenExpiryDate;
 
+    @CreationTimestamp // ¡La magia está aquí!
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
+    private LocalDateTime fechaCreacion;
+
     // Constructores
     public Usuario() {}
 
@@ -79,6 +84,12 @@ public abstract class Usuario implements UserDetails { // Clase abstracta
     public LocalDateTime getResetPasswordTokenExpiryDate() { return resetPasswordTokenExpiryDate; }
     public void setResetPasswordTokenExpiryDate(LocalDateTime resetPasswordTokenExpiryDate) { this.resetPasswordTokenExpiryDate = resetPasswordTokenExpiryDate; }
 
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
 
     // Métodos UserDetails
     @Override

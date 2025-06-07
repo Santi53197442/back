@@ -66,6 +66,7 @@ public class PaypalService {
             logger.error("Error al obtener el token de PayPal", e);
             throw new RuntimeException("Error al comunicarse con PayPal", e);
         }
+    }
 
     /**
      * Crea una orden de pago en PayPal.

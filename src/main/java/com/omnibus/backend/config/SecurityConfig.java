@@ -73,6 +73,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/forgot-password").permitAll()
                         .requestMatchers("/api/auth/reset-password").permitAll()
 
+                        .requestMatchers("/api/paypal/**").permitAll() //PARA PAYPAL
+
                         // --- ENDPOINTS ACCESIBLES POR CLIENTES, VENDEDORES Y ADMINS (DENTRO DE /api/vendedor) ---
                         // Estas reglas específicas deben ir ANTES de la regla general para /api/vendedor/**
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles")

@@ -10,9 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import org.springframework.web.client.RestClientException;
+import java.util.Locale; // <-- IMPORTACIÓN AÑADIDA
 
 @Service
 public class PaypalService {
@@ -59,7 +60,7 @@ public class PaypalService {
             }
         } catch (Exception e) {
             logger.error("Error al generar el token de acceso de PayPal", e);
-            throw new RuntimeException("Error al comunicarse con PayPal", e);
+            throw new RuntimeException("Error al comunicarse con PayPal para obtener token", e);
         }
     }
 
@@ -75,7 +76,10 @@ public class PaypalService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
-        String requestBody = String.format("""
+        // --- CORRECCIÓN APLICADA AQUÍ ---
+        // Usamos Locale.US para asegurar que el separador decimal sea un punto (.),
+        // que es lo que la API de PayPal requiere, independientemente de la configuración del servidor.
+        String requestBody = String.format(Locale.US, """
                 {
                   "intent": "CAPTURE",
                   "purchase_units": [
@@ -92,6 +96,8 @@ public class PaypalService {
         HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
 
         try {
+            // Log para depuración: Imprime el JSON que se enviará a PayPal
+            logger.info("Enviando a PayPal para crear orden: {}", requestBody);
             return restTemplate.postForObject(baseUrl + "/v2/checkout/orders", entity, PaypalOrderResponse.class);
         } catch (Exception e) {
             logger.error("Error al crear la orden en PayPal para el monto {}", amount, e);
@@ -111,9 +117,11 @@ public class PaypalService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
+        // Para capturar, el cuerpo de la petición va vacío (null).
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
 
         try {
+            logger.info("Intentando capturar orden de PayPal con ID: {}", orderId);
             return restTemplate.postForObject(baseUrl + "/v2/checkout/orders/" + orderId + "/capture", entity, PaypalCaptureResponse.class);
         } catch (Exception e) {
             logger.error("Error al capturar la orden {} en PayPal", orderId, e);

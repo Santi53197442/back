@@ -10,6 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import org.springframework.web.client.RestClientException;
 
 @Service
 public class PaypalService {
@@ -32,38 +35,30 @@ public class PaypalService {
      * @return El token de acceso como String.
      */
     private String getAccessToken() {
-        // 1) Credenciales en Basic-Auth codificadas en UTF-8
         String auth = clientId + ":" + clientSecret;
-        String encodedAuth = Base64.getEncoder()
-                .encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+        String encodedAuth = java.util.Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Basic " + encodedAuth);
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON)); // 2) ¡Imprescindible!
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
-        // grant_type=client_credentials
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "client_credentials");
 
-        HttpEntity<MultiValueMap<String, String>> request =
-                new HttpEntity<>(body, headers);
+        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(body, headers);
 
         try {
-            ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                    baseUrl + "/v1/oauth2/token",   // Sandbox: https://api-m.sandbox.paypal.com
-                    request,
-                    JsonNode.class);
+            ResponseEntity<com.fasterxml.jackson.databind.JsonNode> response = restTemplate.postForEntity(
+                    baseUrl + "/v1/oauth2/token", entity, com.fasterxml.jackson.databind.JsonNode.class);
 
-            JsonNode responseBody = response.getBody();
-            if (responseBody != null && responseBody.hasNonNull("access_token")) {
-                return responseBody.get("access_token").asText();
+            if (response.getBody() != null && response.getBody().has("access_token")) {
+                return response.getBody().get("access_token").asText();
+            } else {
+                throw new RuntimeException("No se pudo obtener el token de acceso de PayPal.");
             }
-            // 3) Si llega aquí es que PayPal respondió pero no mandó token
-            throw new IllegalStateException("PayPal no devolvió access_token: " + responseBody);
-
-        } catch (RestClientException e) {
-            logger.error("Error al obtener el token de PayPal", e);
+        } catch (Exception e) {
+            logger.error("Error al generar el token de acceso de PayPal", e);
             throw new RuntimeException("Error al comunicarse con PayPal", e);
         }
     }
@@ -78,6 +73,7 @@ public class PaypalService {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
         String requestBody = String.format("""
                 {
@@ -110,18 +106,18 @@ public class PaypalService {
      */
     public PaypalCaptureResponse captureOrder(String orderId) {
         String accessToken = getAccessToken();
-
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(accessToken);
+        headers.set("Authorization", "Bearer " + accessToken);
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
         HttpEntity<String> entity = new HttpEntity<>(null, headers);
 
-        return restTemplate.postForObject(
-                baseUrl + "/v2/checkout/orders/" + orderId + "/capture",
-                entity,
-                PaypalCaptureResponse.class
-        );
+        try {
+            return restTemplate.postForObject(baseUrl + "/v2/checkout/orders/" + orderId + "/capture", entity, PaypalCaptureResponse.class);
+        } catch (Exception e) {
+            logger.error("Error al capturar la orden {} en PayPal", orderId, e);
+            throw new RuntimeException("Error al capturar el pago de PayPal", e);
+        }
     }
 }

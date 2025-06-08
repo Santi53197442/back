@@ -643,4 +643,28 @@ public class VendedorController {
                     .body(Map.of("message", "Error interno al procesar la solicitud de listado de pasajes."));
         }
     }
+
+    @GetMapping("/viajes/listado-precios")
+    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')") // Accesible para Vendedores y Admins
+    public ResponseEntity<?> listarViajesConPrecio() {
+        try {
+            logger.info("Solicitud para obtener el listado de todos los viajes con sus precios.");
+
+            List<ViajePrecioDTO> viajesConPrecio = viajeService.listarTodosLosViajesConPrecio();
+
+            if (viajesConPrecio.isEmpty()) {
+                logger.info("No se encontraron viajes para listar.");
+                // Devuelve una lista vacía con estado 200 OK, lo cual es correcto.
+                return ResponseEntity.ok(Collections.emptyList());
+            }
+
+            logger.info("Encontrados {} viajes en el listado.", viajesConPrecio.size());
+            return ResponseEntity.ok(viajesConPrecio);
+
+        } catch (Exception e) {
+            logger.error("Error interno al listar los viajes con precios: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno del servidor al procesar la solicitud."));
+        }
+    }
 }

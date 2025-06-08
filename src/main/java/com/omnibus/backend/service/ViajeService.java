@@ -533,4 +533,23 @@ public class ViajeService {
             super(message);
         }
     }
+
+    public List<ViajePrecioDTO> listarTodosLosViajesConPrecio() {
+        // 1. Obtener todos los viajes del repositorio
+        List<Viaje> viajes = viajeRepository.findAll();
+
+        // 2. Mapear cada entidad Viaje a un ViajePrecioDTO
+        return viajes.stream().map(viaje -> new ViajePrecioDTO(
+                viaje.getId(),
+                viaje.getFecha(),
+                viaje.getHoraSalida(),
+                viaje.getHoraLlegada(),
+                viaje.getOrigen().getNombre(), // Obtenemos el nombre del origen
+                viaje.getDestino().getNombre(), // Obtenemos el nombre del destino
+                viaje.getBusAsignado().getMatricula(), // Obtenemos la matrícula del bus
+                viaje.getAsientosDisponibles(),
+                viaje.getEstado(),
+                viaje.getPrecio()
+        )).collect(Collectors.toList());
+    }
 }

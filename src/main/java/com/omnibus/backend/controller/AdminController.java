@@ -2,11 +2,15 @@ package com.omnibus.backend.controller;
 
 import com.omnibus.backend.dto.CreatePrivilegedUserDTO;
 import com.omnibus.backend.dto.UserViewDTO;
+// --- IMPORTACIONES PARA ESTADÍSTICAS ---
+import com.omnibus.backend.dto.dashboard.DashboardStatisticsDTO;
 import com.omnibus.backend.model.Administrador;
 import com.omnibus.backend.model.Cliente;
 import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.model.Vendedor;
 import com.omnibus.backend.repository.UsuarioRepository;
+// --- IMPORTACIONES PARA ESTADÍSTICAS ---
+import com.omnibus.backend.service.DashboardService;
 import com.omnibus.backend.service.UserService;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -17,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -57,6 +62,10 @@ public class AdminController {
     @Autowired
     private UserService userService;
 
+    // --- INYECTAR EL NUEVO SERVICIO ---
+    @Autowired
+    private DashboardService dashboardService;
+
     @PostMapping("/create-privileged")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<?> createPrivilegedUser(@Valid @RequestBody CreatePrivilegedUserDTO dto) {
@@ -78,19 +87,18 @@ public class AdminController {
              CSVParser csvParser = new CSVParser(fileReader,
                      CSVFormat.DEFAULT.withFirstRecordAsHeader().withIgnoreHeaderCase().withTrim())) {
 
-            // --- ESTA ES LA LÍNEA CORREGIDA / AÑADIDA ---
             Iterable<CSVRecord> csvRecords = csvParser.getRecords();
 
-            for (CSVRecord csvRecord : csvRecords) { // Ahora 'csvRecords' está definido
+            for (CSVRecord csvRecord : csvRecords) {
                 rowNum++;
                 CreatePrivilegedUserDTO dto = new CreatePrivilegedUserDTO();
                 try {
                     dto.nombre = csvRecord.get("nombre");
                     dto.apellido = csvRecord.get("apellido");
-                    dto.ci = csvRecord.get("ci"); // Se asigna como String
+                    dto.ci = csvRecord.get("ci");
                     dto.contrasenia = csvRecord.get("contrasenia");
                     dto.email = csvRecord.get("email");
-                    dto.telefono = csvRecord.get("telefono"); // Se asigna como String
+                    dto.telefono = csvRecord.get("telefono");
                     try {
                         String fechaNacStr = csvRecord.get("fechaNac");
                         if (fechaNacStr != null && !fechaNacStr.trim().isEmpty()) {
@@ -237,7 +245,6 @@ public class AdminController {
         return errors;
     }
 
-    //listar
     @GetMapping("/users")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<List<UserViewDTO>> getAllUsers() {
@@ -248,18 +255,17 @@ public class AdminController {
                 rol = "ADMINISTRADOR";
             } else if (usuario instanceof Vendedor) {
                 rol = "VENDEDOR";
-            } else if (usuario instanceof Cliente) { // Asumiendo que tienes una clase Cliente que hereda de Usuario
+            } else if (usuario instanceof Cliente) {
                 rol = "CLIENTE";
             }
-            // Puedes añadir más lógica para otros tipos de usuario o extraer roles de una colección de roles si la tienes
 
             return new UserViewDTO(
                     usuario.getId(),
                     usuario.getNombre(),
                     usuario.getApellido(),
                     usuario.getEmail(),
-                    usuario.getCi(), // Asegúrate que getCi() devuelva Integer o adáptalo
-                    usuario.getTelefono(), // Asegúrate que getTelefono() devuelva Integer o adáptalo
+                    usuario.getCi(),
+                    usuario.getTelefono(),
                     usuario.getFechaNac(),
                     rol
             );
@@ -269,18 +275,21 @@ public class AdminController {
     }
 
     @DeleteMapping("/users/{id}")
-    @PreAuthorize("hasRole('ADMINISTRADOR')")// <-- ¡¡ESTA ES LA CLAVE DE LA SOLUCIÓN!!
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         try {
             userService.deleteUserById(id);
-            // Retorna 204 No Content, que es el estándar para un DELETE exitoso.
             return ResponseEntity.noContent().build();
-        } catch (Exception e) {
-            // Si el servicio lanza una excepción (ej. UsernameNotFoundException),
-            // podrías querer devolver un 404 Not Found.
-            // Aquí puedes añadir un manejo de excepciones más granular.
-            // Por ahora, un 404 genérico si algo sale mal.
+        } catch (UsernameNotFoundException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    // --- NUEVO ENDPOINT PARA LAS ESTADÍSTICAS ---
+    @GetMapping("/dashboard/statistics")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<DashboardStatisticsDTO> getDashboardStatistics() {
+        DashboardStatisticsDTO stats = dashboardService.getDashboardStatistics();
+        return ResponseEntity.ok(stats);
     }
 }

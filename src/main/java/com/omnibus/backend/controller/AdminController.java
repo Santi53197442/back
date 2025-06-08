@@ -285,11 +285,14 @@ public class AdminController {
         }
     }
 
-    // --- NUEVO ENDPOINT PARA LAS ESTADÍSTICAS ---
     @GetMapping("/dashboard/statistics")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
-    public ResponseEntity<DashboardStatisticsDTO> getDashboardStatistics() {
-        DashboardStatisticsDTO stats = dashboardService.getDashboardStatistics();
-        return ResponseEntity.ok(stats);
+    public ResponseEntity<String> getDashboardStatistics() {
+        // Comentamos la llamada al servicio para la prueba
+        // DashboardStatisticsDTO stats = dashboardService.getDashboardStatistics();
+        // return ResponseEntity.ok(stats);
+
+        // Devolvemos una respuesta simple para verificar si el endpoint es accesible
+        return ResponseEntity.ok("El endpoint del dashboard es accesible!");
     }
 }

@@ -122,7 +122,7 @@ public class EmailService {
             <!DOCTYPE html>
             <html lang="es">
             <head>
-                <meta charset="UTF-8">
+                <meta charset="UTF-8" /> <!-- CAMBIO AQUÍ -->
                 <style>
                     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
                     .ticket-container { max-width: 800px; margin: auto; display: flex; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 12px; background-color: #ffffff; }
@@ -169,7 +169,7 @@ public class EmailService {
                     </div>
                     <div class="stub-part">
                         <div class="stub-header">ABORDAR AQUÍ</div>
-                        <img src="cid:qrCodeImage" alt="QR Code" class="qr-code">
+                        <img src="cid:qrCodeImage" alt="QR Code" class="qr-code" /> <!-- CAMBIO AQUÍ -->
                         <div class="ticket-number-stub">#%s</div>
                     </div>
                 </div>

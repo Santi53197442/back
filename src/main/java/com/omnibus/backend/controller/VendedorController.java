@@ -667,4 +667,19 @@ public class VendedorController {
                     .body(Map.of("message", "Error interno del servidor al procesar la solicitud."));
         }
     }
+
+
+    @GetMapping("/omnibus/estadisticas")
+    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')")
+    public ResponseEntity<?> obtenerEstadisticasDeOmnibus() {
+        try {
+            logger.info("Solicitud para obtener datos para estadísticas de ómnibus.");
+            List<OmnibusStatsDTO> datos = omnibusService.obtenerDatosParaEstadisticas();
+            return ResponseEntity.ok(datos);
+        } catch (Exception e) {
+            logger.error("Error interno al obtener estadísticas de ómnibus: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al procesar la solicitud de estadísticas."));
+        }
+    }
 }

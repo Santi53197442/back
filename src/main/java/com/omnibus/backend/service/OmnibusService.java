@@ -2,6 +2,7 @@
 package com.omnibus.backend.service;
 
 import com.omnibus.backend.dto.CreateOmnibusDTO;
+import com.omnibus.backend.dto.OmnibusStatsDTO;
 import com.omnibus.backend.exception.BusConViajesAsignadosException;
 import com.omnibus.backend.model.*;
 import com.omnibus.backend.repository.LocalidadRepository;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class OmnibusService {
@@ -146,5 +148,19 @@ public class OmnibusService {
 
     public List<Omnibus> obtenerOmnibusPorEstado(EstadoBus estado) {
         return omnibusRepository.findByEstado(estado);
+    }
+
+
+    public List<OmnibusStatsDTO> obtenerDatosParaEstadisticas() {
+        // 1. Usar una consulta optimizada si es posible, si no, findAll() está bien para flotas moderadas.
+        List<Omnibus> omnibusLista = omnibusRepository.findAll();
+
+        // 2. Mapear cada entidad Omnibus a un OmnibusStatsDTO
+        return omnibusLista.stream().map(omnibus -> new OmnibusStatsDTO(
+                omnibus.getEstado(),
+                omnibus.getCapacidadAsientos(),
+                omnibus.getMarca(),
+                omnibus.getLocalidadActual().getNombre() // Obtenemos el nombre de la localidad
+        )).collect(Collectors.toList());
     }
 }

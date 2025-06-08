@@ -3,14 +3,13 @@ package com.omnibus.backend.controller;
 import com.omnibus.backend.dto.CreatePrivilegedUserDTO;
 import com.omnibus.backend.dto.UserViewDTO;
 // --- IMPORTACIONES PARA ESTADÍSTICAS ---
-import com.omnibus.backend.dto.dashboard.DashboardStatisticsDTO;
+
 import com.omnibus.backend.model.Administrador;
 import com.omnibus.backend.model.Cliente;
 import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.model.Vendedor;
 import com.omnibus.backend.repository.UsuarioRepository;
 // --- IMPORTACIONES PARA ESTADÍSTICAS ---
-import com.omnibus.backend.service.DashboardService;
 import com.omnibus.backend.service.UserService;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -61,10 +60,6 @@ public class AdminController {
 
     @Autowired
     private UserService userService;
-
-    // --- INYECTAR EL NUEVO SERVICIO ---
-    @Autowired
-    private DashboardService dashboardService;
 
     @PostMapping("/create-privileged")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
@@ -285,15 +280,4 @@ public class AdminController {
         }
     }
 
-    // --- VERSIÓN CORRECTA Y FINAL ---
-    // En AdminController.java
-    @GetMapping("/dashboard/statistics")
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
-    public ResponseEntity<DashboardStatisticsDTO> getDashboardStatistics() {
-        // ---- AÑADE ESTE COMENTARIO ----
-        // Log para forzar el re-despliegue, versión 1.
-        System.out.println(">>> Accediendo al endpoint de estadísticas v1...");
-        DashboardStatisticsDTO stats = dashboardService.getDashboardStatistics();
-        return ResponseEntity.ok(stats);
-    }
 }

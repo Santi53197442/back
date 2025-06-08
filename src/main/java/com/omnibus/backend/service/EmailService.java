@@ -41,7 +41,6 @@ public class EmailService {
     }
 
     public void sendPasswordResetEmail(String to, String token) {
-        // (Este método se mantiene igual, no es necesario cambiarlo)
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
         message.setTo(to);
@@ -64,16 +63,17 @@ public class EmailService {
         MimeMessage mimeMessage = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-        // 1. Generar los datos dinámicos (el código QR)
+        // 1. Generar el código QR
         byte[] qrCodeBytes = qrCodeService.generateQrCodeImage(
                 "Ticket ID: " + pasaje.getId() + " | Pasajero: " + pasaje.getClienteNombre(), 250, 250);
 
         // 2. Construir el cuerpo del correo en HTML
-        String htmlBodyForEmail = buildTicketHtml(false, null); // false = para email, no necesita QR en base64
-        helper.setText(htmlBodyForEmail.formatted(getTicketData(pasaje)), true);
+        String htmlTemplate = buildTicketHtml();
+        String htmlBodyForEmail = htmlTemplate.formatted(getTicketData(pasaje, "cid:qrCodeImage"));
+        helper.setText(htmlBodyForEmail, true);
 
         // 3. Generar el PDF del ticket
-        byte[] pdfBytes = generateTicketPdf(pasaje);
+        byte[] pdfBytes = generateTicketPdf(pasaje, qrCodeBytes);
 
         // 4. Configurar el correo y adjuntar todo
         helper.setTo(pasaje.getClienteEmail());
@@ -94,15 +94,13 @@ public class EmailService {
     /**
      * Nuevo método para generar el PDF a partir del HTML.
      */
-    private byte[] generateTicketPdf(PasajeResponseDTO pasaje) throws WriterException, IOException {
-        // Volvemos a generar el QR y lo convertimos a Base64 para incrustarlo directamente en el HTML del PDF
-        byte[] qrCodeBytes = qrCodeService.generateQrCodeImage(
-                "Ticket ID: " + pasaje.getId() + " | Pasajero: " + pasaje.getClienteNombre(), 250, 250);
+    private byte[] generateTicketPdf(PasajeResponseDTO pasaje, byte[] qrCodeBytes) throws IOException {
+        // Convertimos el QR a Base64 para incrustarlo directamente en el HTML del PDF
         String qrCodeBase64 = "data:image/png;base64," + Base64.getEncoder().encodeToString(qrCodeBytes);
 
-        // Obtenemos la plantilla HTML, esta vez con el marcador de posición para el QR en Base64
-        String htmlForPdf = buildTicketHtml(true, qrCodeBase64);
-        String finalHtml = htmlForPdf.formatted(getTicketData(pasaje));
+        // Obtenemos la plantilla HTML y la formateamos con los datos y el QR en Base64
+        String htmlTemplate = buildTicketHtml();
+        String finalHtml = htmlTemplate.formatted(getTicketData(pasaje, qrCodeBase64));
 
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
@@ -119,33 +117,31 @@ public class EmailService {
     }
 
     /**
-     * Método auxiliar para no repetir los datos del ticket.
+     * Método auxiliar para obtener los datos del ticket en el orden correcto para el formateo.
      */
-    private Object[] getTicketData(PasajeResponseDTO pasaje) {
+    private Object[] getTicketData(PasajeResponseDTO pasaje, String qrImageSource) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
         return new Object[]{
-                String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000), // ID para el header
-                pasaje.getClienteNombre(),
-                pasaje.getFechaViaje().format(dateFormatter),
-                pasaje.getHoraSalidaViaje().format(timeFormatter),
-                pasaje.getOmnibusMatricula(),
-                pasaje.getNumeroAsiento(),
-                pasaje.getPrecio(),
-                pasaje.getOrigenViaje().toUpperCase(),
-                pasaje.getDestinoViaje().toUpperCase(),
-                String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000) // ID para el talón
+                String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000), // 1. ID header
+                pasaje.getClienteNombre(),                                              // 2. Nombre
+                pasaje.getFechaViaje().format(dateFormatter),                           // 3. Fecha
+                pasaje.getHoraSalidaViaje().format(timeFormatter),                      // 4. Hora
+                pasaje.getOmnibusMatricula(),                                           // 5. Matrícula
+                pasaje.getNumeroAsiento(),                                              // 6. Asiento
+                pasaje.getPrecio(),                                                     // 7. Precio
+                pasaje.getOrigenViaje().toUpperCase(),                                  // 8. Origen
+                pasaje.getDestinoViaje().toUpperCase(),                                 // 9. Destino
+                qrImageSource,                                                          // 10. Fuente de la imagen QR
+                String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000)  // 11. ID talón
         };
     }
 
     /**
-     * Plantilla HTML única. Se adapta para el email o para el PDF.
+     * Plantilla HTML única. Devuelve el string sin formatear.
      */
-    private String buildTicketHtml(boolean forPdf, String qrCodeBase64) {
-        // Si es para PDF, usamos el QR en Base64. Si es para email, usamos el 'cid'.
-        String qrImageSource = forPdf ? qrCodeBase64 : "cid:qrCodeImage";
-
+    private String buildTicketHtml() {
         return """
             <!DOCTYPE html>
             <html lang="es">
@@ -154,12 +150,12 @@ public class EmailService {
                 <style>
                     body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f9f9f9; }
                     .ticket-container { max-width: 800px; margin: auto; border-radius: 12px; display: flex; box-shadow: 0 5px 15px rgba(0,0,0,0.1); background-color: #ffffff; border: 1px solid #e0e0e0; }
-                    .main-part { width: 65%%; padding: 30px; }
-                    .stub-part { width: 35%%; background: linear-gradient(to bottom, #ffc107, #ffa000); text-align: center; padding: 30px; border-top-right-radius: 11px; border-bottom-right-radius: 11px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+                    .main-part { width: 65%; padding: 30px; }
+                    .stub-part { width: 35%; background: linear-gradient(to bottom, #ffc107, #ffa000); text-align: center; padding: 30px; border-top-right-radius: 11px; border-bottom-right-radius: 11px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
                     .header-title { font-size: 28px; font-weight: bold; color: #333; }
                     .ticket-id { font-size: 14px; color: #888; font-family: monospace; }
                     .content-wrapper { display: flex; margin-top: 25px; gap: 20px; }
-                    .info-table { width: 60%%; border-collapse: collapse; }
+                    .info-table { width: 60%; border-collapse: collapse; }
                     .info-table td { padding: 8px 0; vertical-align: top; font-size: 15px; }
                     .info-table td.label { width: 90px; font-weight: 600; color: #555; }
                     .route-box { flex-grow: 1; background: #fff8e1; border-radius: 10px; padding: 15px; text-align: center; color: #c89200; }
@@ -195,14 +191,13 @@ public class EmailService {
                     </div>
                     <div class="stub-part">
                         <div class="stub-header">Boarding Pass</div>
+                        <!-- Este %s será reemplazado por 'cid:qrCodeImage' para el email o por la data base64 para el PDF -->
                         <img src="%s" alt="QR Code" class="qr-code">
                         <div class="ticket-id-stub">#%s</div>
                     </div>
                 </div>
             </body>
             </html>
-        """.formatted(
-                qrImageSource // Se inyecta la fuente de la imagen del QR aquí
-        );
+        """;
     }
 }

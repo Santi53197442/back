@@ -15,6 +15,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.util.Base64;
 import java.io.ByteArrayOutputStream; // <-- NUEVA IMPORTACIÓN
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
@@ -63,31 +64,42 @@ public class EmailService {
      */
     public void buildAndSendTicket(PasajeResponseDTO pasaje) throws MessagingException, WriterException, IOException {
         MimeMessage mimeMessage = mailSender.createMimeMessage();
+        // El 'true' para multipart y 'UTF-8' para la codificación son muy importantes.
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-        // 1. Generar el QR
+        // 1. Generar los bytes del código QR
         String qrText = "Ticket ID: " + pasaje.getId() + " | Pasajero: " + pasaje.getClienteNombre() + " | Viaje: " + pasaje.getViajeId();
-        byte[] qrCode = qrCodeService.generateQrCodeImage(qrText, 250, 250);
+        byte[] qrCodeBytes = qrCodeService.generateQrCodeImage(qrText, 250, 250);
 
-        // 2. Construir el cuerpo HTML del correo
-        String htmlBody = buildTicketHtml(pasaje);
+        // 2. Convertir los bytes del QR a una cadena Base64 para incrustarlo en el HTML.
+        // Esto garantiza que se vea en el PDF y en la mayoría de los clientes de correo.
+        String qrCodeBase64 = Base64.getEncoder().encodeToString(qrCodeBytes);
 
-        // 3. (NUEVO) Generar el PDF a partir del mismo HTML
+        // 3. Construir el cuerpo HTML del correo, pasando la cadena Base64 del QR.
+        String htmlBody = buildTicketHtml(pasaje, qrCodeBase64);
+
+        // 4. Generar el archivo PDF a partir del mismo cuerpo HTML.
+        // Como el HTML ahora contiene el QR en Base64, el PDF también lo tendrá.
         byte[] pdfAttachment = createTicketPdf(htmlBody);
 
-        // 4. Configurar el correo
+        // 5. Configurar los detalles del correo electrónico.
         helper.setTo(pasaje.getClienteEmail());
         helper.setFrom(fromEmail);
         helper.setSubject("Tu pasaje de bus para el viaje a " + pasaje.getDestinoViaje());
-        helper.setText(htmlBody, true); // El HTML se muestra en el cuerpo del correo
+        helper.setText(htmlBody, true); // Se establece el HTML como cuerpo del correo.
 
-        // 5. Adjuntar los recursos (QR para el HTML y el PDF)
-        helper.addInline("qrCodeImage", new ByteArrayResource(qrCode), "image/png");
-        helper.addAttachment("Pasaje-" + pasaje.getId() + ".pdf", new ByteArrayResource(pdfAttachment), "application/pdf");
+        // 6. Adjuntar el recurso de imagen del QR con un Content-ID (cid).
+        // Esto sirve como respaldo para clientes de correo muy antiguos que no soportan Base64 en <img>.
+        // Aunque la mayoría ya no lo necesite, es una buena práctica de "mejora progresiva".
+        helper.addInline("qrCodeImageCid", new ByteArrayResource(qrCodeBytes), "image/png");
 
-        // 6. Enviar el correo
+        // 7. Adjuntar el archivo PDF generado.
+        String pdfFileName = "Pasaje-" + pasaje.getId() + ".pdf";
+        helper.addAttachment(pdfFileName, new ByteArrayResource(pdfAttachment), "application/pdf");
+
+        // 8. Enviar el correo.
         mailSender.send(mimeMessage);
-        logger.info("Email con el ticket (HTML y PDF) enviado exitosamente a {}", pasaje.getClienteEmail());
+        logger.info("Email con el ticket (HTML y PDF adjunto) enviado exitosamente a {}", pasaje.getClienteEmail());
     }
 
     /**
@@ -111,81 +123,83 @@ public class EmailService {
      * MODIFICADO: HTML y CSS rediseñados para un aspecto más limpio y moderno.
      * Se eliminó la imagen del bus.
      */
-    private String buildTicketHtml(PasajeResponseDTO pasaje) {
+    private String buildTicketHtml(PasajeResponseDTO pasaje, String qrCodeBase64) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
         String ticketNumber = String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000);
         String formattedPrice = String.format("€ %.2f", pasaje.getPrecio());
 
-        // Se ha rediseñado todo con tablas para máxima compatibilidad.
-        return """
-            <!DOCTYPE html>
-            <html lang="es">
-            <head>
-                <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-                <title>Tu Pasaje de Bus</title>
-                <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; }
-                    .ticket-container { max-width: 800px; margin: 20px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 12px; background-color: #ffffff; }
-                    .main-part { padding: 35px; }
-                    .stub-part { width: 280px; background-color: #f8f9fa; border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
-                    .header h1 { font-size: 24px; font-weight: 600; color: #1a202c; margin: 0; }
-                    .header span { font-size: 14px; color: #718096; }
-                    .info-table td { padding: 6px 0; vertical-align: top; }
-                    .info-table strong { font-weight: 600; color: #4a5568; padding-right: 10px; }
-                    .info-table span { color: #2d3748; }
-                    .route-box { background-color: #f1f5f9; border-radius: 8px; padding: 20px; text-align: center; color: #2d3748; }
-                    .route-box .city { font-size: 20px; font-weight: 600; text-transform: uppercase;}
-                    .route-box .arrow { font-size: 24px; color: #a0aec0; margin: 8px 0; line-height: 1; }
-                    .stub-header { font-size: 20px; font-weight: 600; color: #1a202c; margin-bottom: 25px; text-align: center;}
-                    .qr-code { width: 180px; height: 180px; margin-bottom: 20px; }
-                    .ticket-number-stub { font-size: 16px; font-weight: 600; color: #718096; letter-spacing: 1px; text-align: center; }
-                </style>
-            </head>
-            <body>
-                <table class="ticket-container" width="800" align="center" cellpadding="0" cellspacing="0" role="presentation" style="width:800px; max-width:800px; margin:20px auto; background-color:#ffffff; border-radius:12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td class="main-part" style="padding:35px; border-right: 2px dashed #e0e0e0;">
-                            <!-- Header -->
-                            <div class="header" style="padding-bottom: 20px; border-bottom: 1px solid #eeeeee; margin-bottom: 25px;">
-                                <h1 style="font-size:24px; font-weight:600; color:#1a202c; margin:0;">Bus Ticket</h1>
-                                <span style="font-size:14px; color:#718096;">Ticket ID: #%s</span>
-                            </div>
+        // El Data URI para la imagen QR
+        String qrCodeSrc = "data:image/png;base64," + qrCodeBase64;
 
-                            <!-- Content Table (Info + Route) -->
-                            <table width="100%%" cellpadding="0" cellspacing="0" role="presentation">
-                                <tr>
-                                    <td width="55%%" style="vertical-align: top;">
-                                        <table class="info-table" width="100%%" cellpadding="0" cellspacing="0" role="presentation">
-                                            <tr><td><strong>Pasajero</strong><span>: %s</span></td></tr>
-                                            <tr><td><strong>Fecha</strong><span>: %s</span></td></tr>
-                                            <tr><td><strong>Hora</strong><span>: %s</span></td></tr>
-                                            <tr><td><strong>Omnibus</strong><span>: %s</span></td></tr>
-                                            <tr><td><strong>Asiento</strong><span>: %d</span></td></tr>
-                                            <tr><td><strong>Clase</strong><span>: B</span></td></tr>
-                                            <tr><td><strong>Precio</strong><span>: %s</span></td></tr>
-                                        </table>
-                                    </td>
-                                    <td width="45%%" style="padding-left: 20px; vertical-align: top;">
-                                        <div class="route-box" style="background-color:#f1f5f9; border-radius:8px; padding:20px; text-align:center; color:#2d3748;">
-                                            <div class="city" style="font-size:20px; font-weight:600; text-transform:uppercase;">%s</div>
-                                            <div class="arrow" style="font-size:24px; color:#a0aec0; margin:8px 0; line-height:1;">↓</div>
-                                            <div class="city" style="font-size:20px; font-weight:600; text-transform:uppercase;">%s</div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                        <td class="stub-part" width="280" style="width:280px; background-color:#f8f9fa; padding:35px; text-align:center; vertical-align:middle; border-top-right-radius: 12px; border-bottom-right-radius: 12px;">
-                             <div class="stub-header" style="font-size:20px; font-weight:600; color:#1a202c; margin-bottom:25px;">ABORDAR AQUÍ</div>
-                             <img src="cid:qrCodeImage" alt="QR Code" class="qr-code" width="180" height="180" style="width:180px; height:180px; margin-bottom:20px;" />
-                             <div class="ticket-number-stub" style="font-size:16px; font-weight:600; color:#718096; letter-spacing:1px;">#%s</div>
-                        </td>
-                    </tr>
-                </table>
-            </body>
-            </html>
+        return """
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <title>Tu Pasaje de Bus</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #e9ecef; }
+                .ticket-container { max-width: 800px; margin: 20px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 12px; }
+                /* Parte izquierda con fondo gris claro */
+                .main-part { padding: 35px; background-color: #f8f9fa; border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+                /* Parte derecha con fondo blanco para contraste */
+                .stub-part { width: 280px; background-color: #ffffff; border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+                .header h1 { font-size: 24px; font-weight: 600; color: #1a202c; margin: 0; }
+                .header span { font-size: 14px; color: #718096; }
+                .info-table td { padding: 6px 0; vertical-align: top; }
+                .info-table strong { font-weight: 600; color: #4a5568; padding-right: 10px; }
+                .info-table span { color: #2d3748; }
+                /* Caja de ruta con fondo blanco para que resalte en el fondo gris */
+                .route-box { background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; text-align: center; color: #2d3748; }
+                .route-box .city { font-size: 20px; font-weight: 600; text-transform: uppercase;}
+                .route-box .arrow { font-size: 24px; color: #a0aec0; margin: 8px 0; line-height: 1; }
+                .stub-header { font-size: 20px; font-weight: 600; color: #1a202c; margin-bottom: 25px; text-align: center;}
+                .qr-code { width: 180px; height: 180px; margin-bottom: 20px; }
+                .ticket-number-stub { font-size: 16px; font-weight: 600; color: #718096; letter-spacing: 1px; text-align: center; }
+            </style>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #e9ecef;">
+            <table class="ticket-container" width="800" align="center" cellpadding="0" cellspacing="0" role="presentation" style="width:800px; max-width:800px; margin:20px auto; border-radius:12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+                <tr>
+                    <td class="main-part" style="padding:35px; background-color:#f8f9fa; border-top-left-radius: 12px; border-bottom-left-radius: 12px; border-right: 2px dashed #d8dde3;">
+                        <div class="header" style="padding-bottom: 20px; border-bottom: 1px solid #dee2e6; margin-bottom: 25px;">
+                            <h1 style="font-size:24px; font-weight:600; color:#1a202c; margin:0;">Bus Ticket</h1>
+                            <span style="font-size:14px; color:#718096;">Ticket ID: #%s</span>
+                        </div>
+                        <table width="100%%" cellpadding="0" cellspacing="0" role="presentation">
+                            <tr>
+                                <td width="55%%" style="vertical-align: top;">
+                                    <table class="info-table" width="100%%" cellpadding="0" cellspacing="0" role="presentation">
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Pasajero</strong><span style="color:#2d3748;">: %s</span></td></tr>
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Fecha</strong><span style="color:#2d3748;">: %s</span></td></tr>
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Hora</strong><span style="color:#2d3748;">: %s</span></td></tr>
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Omnibus</strong><span style="color:#2d3748;">: %s</span></td></tr>
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Asiento</strong><span style="color:#2d3748;">: %d</span></td></tr>
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Clase</strong><span style="color:#2d3748;">: B</span></td></tr>
+                                        <tr><td style="padding: 6px 0; vertical-align: top;"><strong style="font-weight:600; color:#4a5568; padding-right:10px;">Precio</strong><span style="color:#2d3748;">: %s</span></td></tr>
+                                    </table>
+                                </td>
+                                <td width="45%%" style="padding-left: 20px; vertical-align: middle;">
+                                    <div class="route-box" style="background-color:#ffffff; border: 1px solid #dee2e6; border-radius:8px; padding:20px; text-align:center; color:#2d3748;">
+                                        <div class="city" style="font-size:20px; font-weight:600; text-transform:uppercase;">%s</div>
+                                        <div class="arrow" style="font-size:24px; color:#a0aec0; margin:8px 0; line-height:1;">↓</div>
+                                        <div class="city" style="font-size:20px; font-weight:600; text-transform:uppercase;">%s</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                    <td class="stub-part" width="280" style="width:280px; background-color:#ffffff; padding:35px; text-align:center; vertical-align:middle; border-top-right-radius: 12px; border-bottom-right-radius: 12px;">
+                         <div class="stub-header" style="font-size:20px; font-weight:600; color:#1a202c; margin-bottom:25px;">ABORDAR AQUÍ</div>
+                         <img src="%s" alt="QR Code" class="qr-code" width="180" height="180" style="width:180px; height:180px; margin-bottom:20px;" />
+                         <div class="ticket-number-stub" style="font-size:16px; font-weight:600; color:#718096; letter-spacing:1px;">#%s</div>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
         """.formatted(
                 ticketNumber,
                 pasaje.getClienteNombre(),
@@ -196,6 +210,7 @@ public class EmailService {
                 formattedPrice,
                 pasaje.getOrigenViaje(),
                 pasaje.getDestinoViaje(),
+                qrCodeSrc, // <-- El QR en Base64 se inserta aquí
                 ticketNumber
         );
     }

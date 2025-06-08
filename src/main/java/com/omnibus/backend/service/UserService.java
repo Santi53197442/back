@@ -167,4 +167,16 @@ public class UserService {
         System.out.println("Contraseña reseteada exitosamente para usuario con token: " + token);
         return true;
     }
+
+    @Transactional
+    public void deleteUserById(Long userId) {
+        // Primero, verifica si el usuario existe antes de intentar eliminarlo.
+        // Esto permite lanzar una excepción más clara si no se encuentra.
+        if (!usuarioRepository.existsById(userId)) {
+            // Lanza una excepción personalizada o una estándar.
+            // Esto es útil para devolver un 404 Not Found desde el controlador.
+            throw new UsernameNotFoundException("Usuario no encontrado con ID: " + userId);
+        }
+        usuarioRepository.deleteById(userId);
+    }
 }

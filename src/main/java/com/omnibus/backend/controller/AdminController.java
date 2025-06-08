@@ -7,6 +7,7 @@ import com.omnibus.backend.model.Cliente;
 import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.model.Vendedor;
 import com.omnibus.backend.repository.UsuarioRepository;
+import com.omnibus.backend.service.UserService;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -52,6 +53,9 @@ public class AdminController {
 
     @Autowired
     private Validator validator;
+
+    @Autowired
+    private UserService userService;
 
     @PostMapping("/create-privileged")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
@@ -262,5 +266,21 @@ public class AdminController {
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(userViewDTOs);
+    }
+
+    @DeleteMapping("/users/{id}")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")// <-- ¡¡ESTA ES LA CLAVE DE LA SOLUCIÓN!!
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        try {
+            userService.deleteUserById(id);
+            // Retorna 204 No Content, que es el estándar para un DELETE exitoso.
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            // Si el servicio lanza una excepción (ej. UsernameNotFoundException),
+            // podrías querer devolver un 404 Not Found.
+            // Aquí puedes añadir un manejo de excepciones más granular.
+            // Por ahora, un 404 genérico si algo sale mal.
+            return ResponseEntity.notFound().build();
+        }
     }
 }

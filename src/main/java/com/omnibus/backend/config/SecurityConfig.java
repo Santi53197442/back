@@ -50,7 +50,8 @@ public class SecurityConfig {
                 "https://frontend-pjqhx2c7u-santi53197442s-projects.vercel.app",
                 "https://frontend-git-master-santi53197442s-projects.vercel.app",
                 "https://frontend-4f1xmt5az-santi53197442s-projects.vercel.app",
-                "https://frontend-kndjuqyhd-santi53197442s-projects.vercel.app"
+                "https://frontend-kndjuqyhd-santi53197442s-projects.vercel.app",
+                "https://www.paypal.com"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));

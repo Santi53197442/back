@@ -1,7 +1,8 @@
 package com.omnibus.backend.service;
 
-import com.omnibus.backend.dto.PasajeResponseDTO;
 import com.google.zxing.WriterException;
+import com.omnibus.backend.dto.PasajeResponseDTO;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder; // <-- NUEVA IMPORTACIÓN
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -9,12 +10,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream; // <-- NUEVA IMPORTACIÓN
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 
@@ -58,35 +59,64 @@ public class EmailService {
     }
 
     /**
-     * Este método ahora es público y síncrono.
-     * Su única responsabilidad es construir y enviar el correo.
-     * Ya no tiene la anotación @Async.
+     * MODIFICADO: Ahora también genera un PDF del ticket y lo adjunta al correo.
      */
     public void buildAndSendTicket(PasajeResponseDTO pasaje) throws MessagingException, WriterException, IOException {
         MimeMessage mimeMessage = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
+        // 1. Generar el QR
         String qrText = "Ticket ID: " + pasaje.getId() + " | Pasajero: " + pasaje.getClienteNombre() + " | Viaje: " + pasaje.getViajeId();
         byte[] qrCode = qrCodeService.generateQrCodeImage(qrText, 250, 250);
 
+        // 2. Construir el cuerpo HTML del correo
         String htmlBody = buildTicketHtml(pasaje);
 
+        // 3. (NUEVO) Generar el PDF a partir del mismo HTML
+        byte[] pdfAttachment = createTicketPdf(htmlBody);
+
+        // 4. Configurar el correo
         helper.setTo(pasaje.getClienteEmail());
         helper.setFrom(fromEmail);
         helper.setSubject("Tu pasaje de bus para el viaje a " + pasaje.getDestinoViaje());
-        helper.setText(htmlBody, true);
+        helper.setText(htmlBody, true); // El HTML se muestra en el cuerpo del correo
 
-       // helper.addInline("busImage", new ClassPathResource("static/images/buss.png"));
+        // 5. Adjuntar los recursos (QR para el HTML y el PDF)
         helper.addInline("qrCodeImage", new ByteArrayResource(qrCode), "image/png");
+        helper.addAttachment("Pasaje-" + pasaje.getId() + ".pdf", new ByteArrayResource(pdfAttachment), "application/pdf");
 
+        // 6. Enviar el correo
         mailSender.send(mimeMessage);
-        logger.info("Email con el ticket y QR construido y enviado exitosamente a {}", pasaje.getClienteEmail());
+        logger.info("Email con el ticket (HTML y PDF) enviado exitosamente a {}", pasaje.getClienteEmail());
     }
 
-    // Este método privado se mantiene exactamente igual
+    /**
+     * NUEVO: Este método privado convierte una cadena HTML en un PDF usando OpenHTMLtoPDF.
+     * @param htmlContent El HTML del ticket.
+     * @return un array de bytes con el contenido del PDF.
+     * @throws IOException Si ocurre un error de I/O.
+     */
+    private byte[] createTicketPdf(String htmlContent) throws IOException {
+        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.withHtmlContent(htmlContent, null);
+            builder.toStream(os);
+            builder.run();
+            return os.toByteArray();
+        }
+    }
+
+
+    /**
+     * MODIFICADO: HTML y CSS rediseñados para un aspecto más limpio y moderno.
+     * Se eliminó la imagen del bus.
+     */
     private String buildTicketHtml(PasajeResponseDTO pasaje) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+        String ticketNumber = String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000);
+        String formattedPrice = String.format("€ %.2f", pasaje.getPrecio());
 
         return """
             <!DOCTYPE html>
@@ -94,63 +124,68 @@ public class EmailService {
             <head>
                 <meta charset="UTF-8">
                 <style>
-                    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
-                    .ticket-container { max-width: 800px; margin: auto; border: 1px solid #ddd; border-radius: 15px; display: flex; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: #fff; }
-                    .main-part { flex-grow: 1; padding: 25px; background: #fff8e1; border-top-left-radius: 15px; border-bottom-left-radius: 15px; }
-                    .stub-part { width: 250px; background: linear-gradient(to bottom, #ffc107, #ff9800); color: #333; padding: 25px; border-top-right-radius: 15px; border-bottom-right-radius: 15px; border-left: 2px dashed #fff; text-align: center; }
-                    .header { font-size: 28px; font-weight: bold; color: #4CAF50; letter-spacing: 2px; padding: 10px; background: linear-gradient(to right, #ffc107, #ff9800); border-top-left-radius: 15px; margin: -25px -25px 20px -25px; text-align: left; padding-left: 25px;}
-                    .ticket-info { display: grid; grid-template-columns: 100px 1fr; gap: 8px 15px; margin-bottom: 20px; }
-                    .ticket-info strong { color: #555; }
-                    .route-box { background: #ffc107; border-radius: 10px; padding: 15px; text-align: center; margin-right: 20px; color: #fff; font-weight: bold;}
-                    .main-content { display: flex; align-items: center; }
-                    .stub-header { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 1px;}
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
+                    .ticket-container { max-width: 800px; margin: auto; display: flex; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 12px; background-color: #ffffff; }
+                    .main-part { flex-grow: 1; padding: 30px; border-right: 2px dashed #e0e0e0; }
+                    .stub-part { width: 280px; min-width: 280px; background-color: #f7f9fc; padding: 30px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; border-top-right-radius: 12px; border-bottom-right-radius: 12px;}
+                    .header { padding-bottom: 20px; border-bottom: 1px solid #eeeeee; margin-bottom: 25px; }
+                    .header h1 { font-size: 24px; font-weight: 600; color: #1a202c; margin: 0; }
+                    .header span { font-size: 14px; color: #718096; }
+                    .ticket-info { display: grid; grid-template-columns: 100px 1fr; gap: 12px 15px; }
+                    .ticket-info strong { font-weight: 600; color: #4a5568; }
+                    .ticket-info span { color: #2d3748; }
+                    .main-content { display: flex; justify-content: space-between; align-items: flex-start; }
+                    .route-box { background-color: #edf2f7; border-radius: 8px; padding: 20px; text-align: center; color: #2d3748; }
+                    .route-box .city { font-size: 22px; font-weight: 600; }
+                    .route-box .arrow { font-size: 24px; color: #a0aec0; margin: 8px 0; }
+                    .stub-header { font-size: 22px; font-weight: 600; color: #1a202c; margin-bottom: 25px; }
+                    .qr-code { width: 180px; height: 180px; margin-bottom: 20px; }
+                    .ticket-number-stub { font-size: 16px; font-weight: 600; color: #718096; letter-spacing: 1px; }
                 </style>
             </head>
             <body>
                 <div class="ticket-container">
                     <div class="main-part">
-                        <div class="header">BUS TICKET <span style="float:right; font-size: 16px; color: #555; margin-top: 8px;">#%s</span></div>
+                        <div class="header">
+                            <h1>Bus Ticket</h1>
+                            <span>Ticket ID: #%s</span>
+                        </div>
                         <div class="main-content">
-                            <div>
-                                <div class="ticket-info">
-                                    <strong>Date</strong><span>: %s</span>
-                                    <strong>Time</strong><span>: %s</span>
-                                    <strong>Name</strong><span>: %s</span>
-                                    <strong>Bus</strong><span>: %s</span>
-                                    <strong>Seat</strong><span>: %d</span>
-                                    <strong>Class</strong><span>: B</span>
-                                    <strong>Price</strong><span>: € %.2f</span>
-                                </div>
+                            <div class="ticket-info">
+                                <strong>Pasajero</strong><span>: %s</span>
+                                <strong>Fecha</strong><span>: %s</span>
+                                <strong>Hora</strong><span>: %s</span>
+                                <strong>Omnibus</strong><span>: %s</span>
+                                <strong>Asiento</strong><span>: %d</span>
+                                <strong>Clase</strong><span>: B</span>
+                                <strong>Precio</strong><span>: %s</span>
                             </div>
-                            <div style="margin-left: auto; text-align: center;">
-                                <div class="route-box">
-                                    <div style="font-size: 20px;">%s</div>
-                                    <div style="font-size: 24px; margin: 5px 0;">↓</div>
-                                    <div style="font-size: 20px;">%s</div>
-                                </div>
+                            <div class="route-box">
+                                <div class="city">%s</div>
+                                <div class="arrow">↓</div>
+                                <div class="city">%s</div>
                             </div>
                         </div>
                     </div>
                     <div class="stub-part">
-                        <div class="stub-header">BUS TICKET</div>
-                        <img src="cid:busImage" alt="Bus" style="width: 180px; margin: 20px 0;">
-                        <img src="cid:qrCodeImage" alt="QR Code" style="width: 150px; height: 150px; margin-top: 10px;">
-                        <div style="font-size: 14px; margin-top: 10px; color: #fff; font-weight:bold;">#%s</div>
+                        <div class="stub-header">ABORDAR AQUÍ</div>
+                        <img src="cid:qrCodeImage" alt="QR Code" class="qr-code">
+                        <div class="ticket-number-stub">#%s</div>
                     </div>
                 </div>
             </body>
             </html>
         """.formatted(
-                String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000),
+                ticketNumber,
+                pasaje.getClienteNombre(),
                 pasaje.getFechaViaje().format(dateFormatter),
                 pasaje.getHoraSalidaViaje().format(timeFormatter),
-                pasaje.getClienteNombre(),
                 pasaje.getOmnibusMatricula(),
                 pasaje.getNumeroAsiento(),
-                pasaje.getPrecio(),
+                formattedPrice,
                 pasaje.getOrigenViaje().toUpperCase(),
                 pasaje.getDestinoViaje().toUpperCase(),
-                String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000)
+                ticketNumber
         );
     }
 }

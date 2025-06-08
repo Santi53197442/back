@@ -76,7 +76,7 @@ public class EmailService {
         helper.setSubject("Tu pasaje de bus para el viaje a " + pasaje.getDestinoViaje());
         helper.setText(htmlBody, true);
 
-        helper.addInline("busImage", new ClassPathResource("static/images/buss.png"));
+       // helper.addInline("busImage", new ClassPathResource("static/images/buss.png"));
         helper.addInline("qrCodeImage", new ByteArrayResource(qrCode), "image/png");
 
         mailSender.send(mimeMessage);

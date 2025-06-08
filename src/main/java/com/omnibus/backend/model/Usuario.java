@@ -110,4 +110,13 @@ public abstract class Usuario implements UserDetails { // Clase abstracta
     public boolean isCredentialsNonExpired() { return true; }
     @Override
     public boolean isEnabled() { return true; }
+
+    public String getNombreCompleto() {
+        // Si apellido es nulo o está vacío, devuelve solo el nombre.
+        if (this.apellido == null || this.apellido.isBlank()) {
+            return this.nombre;
+        }
+        // Si no, devuelve "Nombre Apellido"
+        return this.nombre + " " + this.apellido;
+    }
 }

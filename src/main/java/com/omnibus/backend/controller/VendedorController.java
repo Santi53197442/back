@@ -37,6 +37,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.omnibus.backend.service.AsyncService;
+
+import com.omnibus.backend.service.EmailService;
+import org.springframework.context.annotation.Lazy;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -54,18 +59,21 @@ public class VendedorController {
     private final ViajeService viajeService;
     private final Validator validator;
     private final pasajeService pasajeService;
+    private final AsyncService asyncService;
 
     @Autowired
     public VendedorController(LocalidadService localidadService,
                               OmnibusService omnibusService,
                               ViajeService viajeService,
                               Validator validator,
-                              pasajeService pasajeService) {
+                              pasajeService pasajeService,
+                              AsyncService asyncService) {
         this.localidadService = localidadService;
         this.omnibusService = omnibusService;
         this.viajeService = viajeService;
         this.validator = validator;
         this.pasajeService = pasajeService;
+        this.asyncService = asyncService;
     }
 
     // --- Endpoints de Localidad ---
@@ -547,13 +555,17 @@ public class VendedorController {
         try {
             logger.info("API: Solicitud de compra de pasaje: Viaje ID {}, Cliente ID {}, Asiento {}",
                     compraRequestDTO.getViajeId(), compraRequestDTO.getClienteId(), compraRequestDTO.getNumeroAsiento());
-            // Aquí, si el rol es CLIENTE, idealmente el clienteId debería ser el del usuario autenticado.
-            // Podrías añadir lógica aquí para obtener el clienteId del Principal si el rol es CLIENTE
-            // y verificar que coincida con el compraRequestDTO.getClienteId() o usar el del Principal directamente.
-            // Por ahora, la lógica del servicio `comprarPasaje` manejará la validación del `clienteId` como esté implementada.
 
             PasajeResponseDTO pasajeComprado = this.pasajeService.comprarPasaje(compraRequestDTO);
             logger.info("API: Pasaje comprado exitosamente con ID: {}", pasajeComprado.getId());
+
+            // --- LLAMADA AL NUEVO SERVICIO ASÍNCRONO ---
+            try {
+                asyncService.sendTicketEmailAsync(pasajeComprado);
+            } catch (Exception e) {
+                logger.error("Error al despachar la tarea asíncrona de envío de email para pasaje {}. La compra fue exitosa.", pasajeComprado.getId(), e);
+            }
+
             return ResponseEntity.status(HttpStatus.CREATED).body(pasajeComprado);
         } catch (EntityNotFoundException e) {
             logger.warn("API: Error en compra de pasaje. Entidad no encontrada: {}", e.getMessage());
@@ -570,6 +582,7 @@ public class VendedorController {
                     .body(Map.of("message", "Error interno al procesar la compra del pasaje."));
         }
     }
+
 
     @GetMapping("/viajes/{viajeId}/asientos-ocupados")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO

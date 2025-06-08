@@ -90,6 +90,12 @@
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
+		<dependency>
+			<groupId>com.openhtmltopdf</groupId>
+			<artifactId>openhtmltopdf-pdfbox</artifactId>
+			<version>1.0.10</version> <!-- Esta es una versión estable y popular -->
+		</dependency>
+
 		<!-- Para generar códigos QR (Zebra Crossing) -->
 		<dependency>
 			<groupId>com.google.zxing</groupId>

@@ -64,40 +64,39 @@ public class EmailService {
      */
     public void buildAndSendTicket(PasajeResponseDTO pasaje) throws MessagingException, WriterException, IOException {
         MimeMessage mimeMessage = mailSender.createMimeMessage();
-        // El 'true' para multipart y 'UTF-8' para la codificación son muy importantes.
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-        // 1. Generar los bytes del código QR
+        // 1. Generar los bytes del código QR una sola vez
         String qrText = "Ticket ID: " + pasaje.getId() + " | Pasajero: " + pasaje.getClienteNombre() + " | Viaje: " + pasaje.getViajeId();
         byte[] qrCodeBytes = qrCodeService.generateQrCodeImage(qrText, 250, 250);
 
-        // 2. Convertir los bytes del QR a una cadena Base64 para incrustarlo en el HTML.
-        // Esto garantiza que se vea en el PDF y en la mayoría de los clientes de correo.
-        String qrCodeBase64 = Base64.getEncoder().encodeToString(qrCodeBytes);
+        // 2. Preparar los dos tipos de 'src' para la imagen del QR
+        //    - Para el PDF: se usa Base64.
+        String qrSrcForPdf = "data:image/png;base64," + Base64.getEncoder().encodeToString(qrCodeBytes);
+        //    - Para el email: se usa Content-ID (cid).
+        String qrSrcForEmail = "cid:qrCodeImage";
 
-        // 3. Construir el cuerpo HTML del correo, pasando la cadena Base64 del QR.
-        String htmlBody = buildTicketHtml(pasaje, qrCodeBase64);
+        // 3. Generar el HTML para el PDF y crear el adjunto
+        String htmlForPdf = buildTicketHtml(pasaje, qrSrcForPdf);
+        byte[] pdfAttachment = createTicketPdf(htmlForPdf);
 
-        // 4. Generar el archivo PDF a partir del mismo cuerpo HTML.
-        // Como el HTML ahora contiene el QR en Base64, el PDF también lo tendrá.
-        byte[] pdfAttachment = createTicketPdf(htmlBody);
+        // 4. Generar el HTML para el cuerpo del correo
+        String htmlBodyForEmail = buildTicketHtml(pasaje, qrSrcForEmail);
 
-        // 5. Configurar los detalles del correo electrónico.
+        // 5. Configurar los detalles del correo electrónico
         helper.setTo(pasaje.getClienteEmail());
         helper.setFrom(fromEmail);
         helper.setSubject("Tu pasaje de bus para el viaje a " + pasaje.getDestinoViaje());
-        helper.setText(htmlBody, true); // Se establece el HTML como cuerpo del correo.
+        helper.setText(htmlBodyForEmail, true); // Usamos el HTML específico para email
 
-        // 6. Adjuntar el recurso de imagen del QR con un Content-ID (cid).
-        // Esto sirve como respaldo para clientes de correo muy antiguos que no soportan Base64 en <img>.
-        // Aunque la mayoría ya no lo necesite, es una buena práctica de "mejora progresiva".
-        helper.addInline("qrCodeImageCid", new ByteArrayResource(qrCodeBytes), "image/png");
+        // 6. Adjuntar el recurso de imagen inline para que el 'cid:qrCodeImage' funcione
+        helper.addInline("qrCodeImage", new ByteArrayResource(qrCodeBytes), "image/png");
 
-        // 7. Adjuntar el archivo PDF generado.
+        // 7. Adjuntar el archivo PDF
         String pdfFileName = "Pasaje-" + pasaje.getId() + ".pdf";
-        helper.addAttachment(pdfFileName, new ByteArrayResource(pdfAttachment), "application/pdf");
+        helper.addAttachment(pdfFileName, new ByteArrayResource(pdfAttachment));
 
-        // 8. Enviar el correo.
+        // 8. Enviar
         mailSender.send(mimeMessage);
         logger.info("Email con el ticket (HTML y PDF adjunto) enviado exitosamente a {}", pasaje.getClienteEmail());
     }
@@ -123,16 +122,14 @@ public class EmailService {
      * MODIFICADO: HTML y CSS rediseñados para un aspecto más limpio y moderno.
      * Se eliminó la imagen del bus.
      */
-    private String buildTicketHtml(PasajeResponseDTO pasaje, String qrCodeBase64) {
+    private String buildTicketHtml(PasajeResponseDTO pasaje, String qrCodeSrc) { // <-- CAMBIO EN LA FIRMA
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
         String ticketNumber = String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000);
         String formattedPrice = String.format("€ %.2f", pasaje.getPrecio());
 
-        // El Data URI para la imagen QR
-        String qrCodeSrc = "data:image/png;base64," + qrCodeBase64;
-
+        // NOTA: El HTML y CSS son los mismos, solo cambia cómo se inserta el QR
         return """
         <!DOCTYPE html>
         <html lang="es">
@@ -142,16 +139,13 @@ public class EmailService {
             <style>
                 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #e9ecef; }
                 .ticket-container { max-width: 800px; margin: 20px auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 12px; }
-                /* Parte izquierda con fondo gris claro */
                 .main-part { padding: 35px; background-color: #f8f9fa; border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
-                /* Parte derecha con fondo blanco para contraste */
                 .stub-part { width: 280px; background-color: #ffffff; border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
                 .header h1 { font-size: 24px; font-weight: 600; color: #1a202c; margin: 0; }
                 .header span { font-size: 14px; color: #718096; }
                 .info-table td { padding: 6px 0; vertical-align: top; }
                 .info-table strong { font-weight: 600; color: #4a5568; padding-right: 10px; }
                 .info-table span { color: #2d3748; }
-                /* Caja de ruta con fondo blanco para que resalte en el fondo gris */
                 .route-box { background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; text-align: center; color: #2d3748; }
                 .route-box .city { font-size: 20px; font-weight: 600; text-transform: uppercase;}
                 .route-box .arrow { font-size: 24px; color: #a0aec0; margin: 8px 0; line-height: 1; }
@@ -193,7 +187,10 @@ public class EmailService {
                     </td>
                     <td class="stub-part" width="280" style="width:280px; background-color:#ffffff; padding:35px; text-align:center; vertical-align:middle; border-top-right-radius: 12px; border-bottom-right-radius: 12px;">
                          <div class="stub-header" style="font-size:20px; font-weight:600; color:#1a202c; margin-bottom:25px;">ABORDAR AQUÍ</div>
-                         <img src="%s" alt="QR Code" class="qr-code" width="180" height="180" style="width:180px; height:180px; margin-bottom:20px;" />
+                         <!-- Para corregir el centrado en el PDF, envolvemos la imagen en un div centrado -->
+                         <div style="text-align: center;">
+                            <img src="%s" alt="QR Code" class="qr-code" width="180" height="180" style="width:180px; height:180px; margin-bottom:20px;" />
+                         </div>
                          <div class="ticket-number-stub" style="font-size:16px; font-weight:600; color:#718096; letter-spacing:1px;">#%s</div>
                     </td>
                 </tr>
@@ -210,7 +207,7 @@ public class EmailService {
                 formattedPrice,
                 pasaje.getOrigenViaje(),
                 pasaje.getDestinoViaje(),
-                qrCodeSrc, // <-- El QR en Base64 se inserta aquí
+                qrCodeSrc, // <-- CAMBIO: Se usa el parámetro qrCodeSrc
                 ticketNumber
         );
     }

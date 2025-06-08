@@ -286,10 +286,13 @@ public class AdminController {
     }
 
     // --- VERSIÓN CORRECTA Y FINAL ---
+    // En AdminController.java
     @GetMapping("/dashboard/statistics")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<DashboardStatisticsDTO> getDashboardStatistics() {
-        // Restauramos la llamada real al servicio
+        // ---- AÑADE ESTE COMENTARIO ----
+        // Log para forzar el re-despliegue, versión 1.
+        System.out.println(">>> Accediendo al endpoint de estadísticas v1...");
         DashboardStatisticsDTO stats = dashboardService.getDashboardStatistics();
         return ResponseEntity.ok(stats);
     }

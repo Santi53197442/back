@@ -4,10 +4,7 @@ import com.omnibus.backend.dto.AuthResponseDTO;
 import com.omnibus.backend.dto.LoginDTO;
 import com.omnibus.backend.dto.RegisterDTO;
 // Importa las subclases si las vas a usar explícitamente con instanceof
-import com.omnibus.backend.model.Administrador;
-import com.omnibus.backend.model.Cliente;
-import com.omnibus.backend.model.Usuario; // Clase base
-import com.omnibus.backend.model.Vendedor;
+import com.omnibus.backend.model.*;
 import com.omnibus.backend.repository.UsuarioRepository;
 import com.omnibus.backend.security.JwtUtil;
 import com.omnibus.backend.service.CustomUserDetailsService;
@@ -57,30 +54,31 @@ public class AuthController {
     static class ResetPasswordRequest { public String token; public String newPassword; }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) { // RegisterDTO puede seguir igual
+    public ResponseEntity<?> register(@RequestBody RegisterDTO dto) {
         if (usuarioRepository.findByEmail(dto.email).isPresent()) {
             return ResponseEntity.badRequest().body(Map.of("message", "El email ya está registrado."));
         }
-        // Validaciones básicas (se mantienen)
-        if (dto.nombre == null || dto.nombre.trim().isEmpty() || /* ...resto de validaciones... */ dto.fechaNac == null) {
+        // ...resto de validaciones...
+        if (dto.nombre == null || dto.nombre.trim().isEmpty() || /* ... */ dto.fechaNac == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Todos los campos son requeridos."));
         }
 
-        // Para el registro público, siempre creamos un Cliente.
-        // Los campos específicos de Cliente (si los tuviera y vinieran del DTO) se pasarían aquí.
+        // --- CAMBIO PRINCIPAL AQUÍ ---
+        // Ahora creamos el cliente y le pasamos el tipo por defecto "COMUN".
         Cliente nuevoCliente = new Cliente(
                 dto.nombre,
                 dto.apellido,
                 dto.ci,
-                passwordEncoder.encode(dto.contrasenia), // Hashear contraseña
+                passwordEncoder.encode(dto.contrasenia),
                 dto.email,
                 dto.telefono,
-                dto.fechaNac
-                // , 0 // Ejemplo si Cliente tuviera 'puntosFidelidad' iniciales
+                dto.fechaNac,
+                TipoCliente.COMUN // <-- ¡AQUÍ ESTÁ LA MAGIA!
         );
+        // ----------------------------
 
         try {
-            usuarioRepository.save(nuevoCliente); // Guardamos la instancia de Cliente
+            usuarioRepository.save(nuevoCliente);
             return ResponseEntity.ok(Map.of("message", "Usuario Cliente registrado exitosamente."));
         } catch (Exception e) {
             logger.error("Error al registrar nuevo cliente: {}", e.getMessage(), e);

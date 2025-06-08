@@ -64,23 +64,30 @@ public class EmailService {
      */
     public void buildAndSendTicket(PasajeResponseDTO pasaje) throws MessagingException, WriterException, IOException {
         MimeMessage mimeMessage = mailSender.createMimeMessage();
+        // El 'true' es importante para permitir contenido multipart (texto, imágenes, etc.)
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
+        // Generar el QR
         String qrText = "Ticket ID: " + pasaje.getId() + " | Pasajero: " + pasaje.getClienteNombre() + " | Viaje: " + pasaje.getViajeId();
         byte[] qrCode = qrCodeService.generateQrCodeImage(qrText, 250, 250);
 
+        // Construir el cuerpo del correo con el nuevo HTML
         String htmlBody = buildTicketHtml(pasaje);
 
         helper.setTo(pasaje.getClienteEmail());
         helper.setFrom(fromEmail);
-        helper.setSubject("Tu pasaje de bus para el viaje a " + pasaje.getDestinoViaje());
+        helper.setSubject("✅ Tu pasaje para el viaje a " + pasaje.getDestinoViaje());
         helper.setText(htmlBody, true);
 
+        // --- ¡AMBAS LÍNEAS SON NECESARIAS! ---
+        // 1. Adjunta la imagen del bus para usarla con cid:busImage
         helper.addInline("busImage", new ClassPathResource("static/bus.png"));
+
+        // 2. Adjunta la imagen del QR generada para usarla con cid:qrCodeImage
         helper.addInline("qrCodeImage", new ByteArrayResource(qrCode), "image/png");
 
         mailSender.send(mimeMessage);
-        logger.info("Email con el ticket y QR construido y enviado exitosamente a {}", pasaje.getClienteEmail());
+        logger.info("Email con el ticket (ID: {}) y QR construido y enviado exitosamente a {}", pasaje.getId(), pasaje.getClienteEmail());
     }
 
     // Este método privado se mantiene exactamente igual
@@ -95,60 +102,61 @@ public class EmailService {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
-                .ticket-container { max-width: 800px; margin: auto; border-radius: 15px; display: flex; box-shadow: 0 6px 12px rgba(0,0,0,0.1); background-color: #fff; overflow: hidden; }
+                body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+                .ticket-container { max-width: 800px; margin: auto; border-radius: 12px; display: flex; box-shadow: 0 5px 15px rgba(0,0,0,0.1); background-color: #ffffff; overflow: hidden; border: 1px solid #ddd; }
                 
-                /* Parte Principal (Izquierda) */
-                .main-part { flex-grow: 1; padding: 30px; background: #fff; display: flex; flex-direction: column; }
-                .header { padding-bottom: 20px; border-bottom: 1px solid #eee; margin-bottom: 20px;}
-                .header-title { font-size: 28px; font-weight: bold; color: #333; letter-spacing: 1px; }
-                .ticket-id { font-size: 16px; color: #888; font-family: monospace;}
+                .main-part { flex-grow: 1; padding: 25px; }
+                .header-title { font-size: 26px; font-weight: bold; color: #333; }
+                .ticket-id { font-size: 14px; color: #777; font-family: monospace; }
                 
-                .content-wrapper { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+                .content-wrapper { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 25px; gap: 20px; }
                 
-                .ticket-info { display: grid; grid-template-columns: 90px 1fr; gap: 10px 15px; font-size: 15px; }
-                .ticket-info strong { color: #555; font-weight: 600; }
-                .ticket-info span { color: #333; }
+                /* Usamos una tabla para máxima compatibilidad en clientes de email */
+                .info-table { width: 100%%; border-collapse: collapse; }
+                .info-table td { padding: 6px 0; vertical-align: top; font-size: 15px; }
+                .info-table td.label { width: 90px; font-weight: 600; color: #555; }
+                .info-table td.value { color: #333; }
                 
-                .route-box { background: #fff8e1; border: 1px solid #ffecc1; border-radius: 10px; padding: 20px; text-align: center; color: #d29c00; font-weight: bold; align-self: center; }
-                .route-box .city { font-size: 22px; font-weight: 700; }
-                .route-box .arrow { font-size: 28px; margin: 8px 0; color: #ffc107; }
+                .route-box { background: #fff8e1; border-radius: 10px; padding: 20px; text-align: center; color: #c89200; font-weight: bold; min-width: 200px;}
+                .route-box .city { font-size: 20px; font-weight: 700; }
+                .route-box .arrow { font-size: 24px; margin: 5px 0; color: #ffc107; }
 
-                /* Talón (Derecha) */
                 .stub-part {
-                    width: 250px;
-                    background: linear-gradient(135deg, #ffc107, #ffa000);
+                    width: 240px;
+                    background: linear-gradient(to bottom, #ffc107, #ffa000);
                     color: white;
-                    padding: 30px;
-                    border-left: 3px dashed #fff;
+                    padding: 25px;
+                    border-left: 2px dashed #ffffff;
                     text-align: center;
                     display: flex;
                     flex-direction: column;
-                    justify-content: space-between;
+                    justify-content: center;
                     align-items: center;
                 }
-                .stub-header { font-size: 24px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
-                .stub-part img.bus-image { width: 150px; margin: 15px 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2)); }
-                .stub-part img.qr-code { width: 160px; height: 160px; margin-top: 15px; border: 5px solid white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                .stub-header { font-size: 22px; font-weight: bold; text-transform: uppercase; margin-bottom: 20px; }
+                .stub-part img.bus-image { width: 140px; margin-bottom: 25px; }
+                .stub-part img.qr-code { width: 150px; height: 150px; border: 4px solid white; border-radius: 6px; }
+                .stub-part .ticket-id-stub { font-size: 14px; margin-top: 15px; font-family: monospace; color: white; }
 
             </style>
         </head>
         <body>
             <div class="ticket-container">
                 <div class="main-part">
-                    <div class="header">
+                    <div>
                         <span class="header-title">BUS TICKET</span>
-                        <span class="ticket-id" style="float: right;">#%s</span>
+                        <span style="float: right;" class="ticket-id">#%s</span>
                     </div>
                     <div class="content-wrapper">
-                        <div class="ticket-info">
-                            <strong>Pasajero</strong><span>: %s</span>
-                            <strong>Fecha</strong><span>: %s</span>
-                            <strong>Hora</strong><span>: %s</span>
-                            <strong>Bus</strong><span>: %s</span>
-                            <strong>Asiento</strong><span>: %d</span>
-                            <strong>Precio</strong><span>: € %.2f</span>
-                        </div>
+                        <!-- Tabla para la información del ticket -->
+                        <table class="info-table" border="0" cellpadding="0" cellspacing="0">
+                            <tr><td class="label">Pasajero:</td><td class="value">%s</td></tr>
+                            <tr><td class="label">Fecha:</td><td class="value">%s</td></tr>
+                            <tr><td class="label">Hora:</td><td class="value">%s</td></tr>
+                            <tr><td class="label">Bus:</td><td class="value">%s</td></tr>
+                            <tr><td class="label">Asiento:</td><td class="value">%d</td></tr>
+                            <tr><td class="label">Precio:</td><td class="value">€ %.2f</td></tr>
+                        </table>
                         <div class="route-box">
                             <div class="city">%s</div>
                             <div class="arrow">↓</div>
@@ -160,7 +168,7 @@ public class EmailService {
                     <div class="stub-header">Boarding Pass</div>
                     <img src="cid:busImage" alt="Bus" class="bus-image">
                     <img src="cid:qrCodeImage" alt="QR Code" class="qr-code">
-                    <div class="ticket-id">#%s</div>
+                    <div class="ticket-id-stub">#%s</div>
                 </div>
             </div>
         </body>

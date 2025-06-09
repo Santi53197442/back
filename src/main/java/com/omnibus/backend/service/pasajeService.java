@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -362,7 +363,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         }
 
         List<Pasaje> pasajesReservados = new ArrayList<>();
-        LocalDateTime fechaReserva = LocalDateTime.now();
+        LocalDateTime fechaReserva = LocalDateTime.now(ZoneOffset.UTC);
 
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
             Pasaje pasaje = new Pasaje();

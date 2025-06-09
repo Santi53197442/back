@@ -46,6 +46,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -731,16 +732,21 @@ public class VendedorController {
         }
     }
 
-    // En VendedorController.java
     @PostMapping("/pasajes/reservar-temporalmente")
     @PreAuthorize("hasAnyRole('CLIENTE', 'VENDEDOR', 'ADMINISTRADOR')")
     public ResponseEntity<?> reservarAsientosTemporalmente(@Valid @RequestBody CompraMultiplePasajesRequestDTO reservaRequestDTO) {
         try {
-            // Reutilizamos el DTO de compra. Solo necesitamos viajeId, clienteId y numerosAsiento.
             List<PasajeResponseDTO> pasajesReservados = pasajeService.reservarAsientosTemporalmente(reservaRequestDTO);
-            // Devolvemos solo la información necesaria: la fecha de expiración.
-            LocalDateTime expiracion = pasajesReservados.get(0).getFechaReserva().plusMinutes(10);
-            return ResponseEntity.ok(Map.of("expiracion", expiracion.toString()));
+
+            // --- CÁLCULO DE EXPIRACIÓN CORREGIDO ---
+            LocalDateTime expiracionLocal = pasajesReservados.get(0).getFechaReserva().plusMinutes(10);
+
+            // Convertimos a UTC y luego a un string con formato ISO 8601 (con la 'Z')
+            String expiracionUTCString = expiracionLocal.atOffset(ZoneOffset.UTC).toString();
+
+            logger.info("Enviando fecha de expiración en UTC: {}", expiracionUTCString);
+
+            return ResponseEntity.ok(Map.of("expiracion", expiracionUTCString));
         } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
         } catch (EntityNotFoundException e) {

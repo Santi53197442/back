@@ -203,7 +203,8 @@ public class UserService {
             return new UsuarioStatsDTO(
                     rol,
                     usuario.getFechaCreacion(),
-                    tipoCliente
+                    tipoCliente,
+                    usuario.getFechaNac() // <-- AÑADIR ESTA LÍNEA
             );
         }).collect(Collectors.toList());
     }

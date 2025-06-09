@@ -86,6 +86,8 @@ public class AuthController {
         }
     }
 
+    // En tu AuthController.java
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginDTO dto) {
         try {
@@ -99,30 +101,38 @@ public class AuthController {
         final UserDetails userDetails = userDetailsService.loadUserByUsername(dto.email);
         final String token = jwtUtil.generateToken(userDetails);
 
-        Usuario usuarioAutenticado = (Usuario) userDetails; // Tu clase base Usuario DEBE tener un método getId()
+        Usuario usuarioAutenticado = (Usuario) userDetails;
 
         String rolParaFrontend = "desconocido";
-        if (usuarioAutenticado instanceof Administrador) {
-            rolParaFrontend = "administrador";
-        } else if (usuarioAutenticado instanceof Vendedor) {
-            rolParaFrontend = "vendedor";
-        } else if (usuarioAutenticado instanceof Cliente) {
-            rolParaFrontend = "cliente";
-        }
 
-        // --- CAMBIO AQUÍ para incluir el ID ---
+        // ====================== LÓGICA AÑADIDA PARA TIPO DE CLIENTE ======================
+        TipoCliente tipoCliente = null; // Variable para guardar el tipo, nula por defecto para otros roles
+
+        if (usuarioAutenticado instanceof Administrador) {
+            rolParaFrontend = "ADMINISTRADOR"; // Usar mayúsculas para consistencia
+        } else if (usuarioAutenticado instanceof Vendedor) {
+            rolParaFrontend = "VENDEDOR"; // Usar mayúsculas para consistencia
+        } else if (usuarioAutenticado instanceof Cliente) {
+            rolParaFrontend = "CLIENTE"; // Usar mayúsculas para consistencia
+            // Si es un Cliente, obtenemos su tipo específico
+            tipoCliente = ((Cliente) usuarioAutenticado).getTipo();
+        }
+        // ===============================================================================
+
+        // --- CONSTRUCTOR ACTUALIZADO con el nuevo campo tipoCliente ---
         return ResponseEntity.ok(new AuthResponseDTO(
                 token,
-                usuarioAutenticado.getId(), // <<<--- AÑADIR ESTO
+                usuarioAutenticado.getId(),
                 usuarioAutenticado.getEmail(),
                 rolParaFrontend,
                 usuarioAutenticado.getNombre(),
                 usuarioAutenticado.getApellido(),
                 usuarioAutenticado.getCi() != null ? String.valueOf(usuarioAutenticado.getCi()) : "",
                 usuarioAutenticado.getTelefono() != null ? String.valueOf(usuarioAutenticado.getTelefono()) : "",
-                usuarioAutenticado.getFechaNac() != null ? usuarioAutenticado.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : ""
+                usuarioAutenticado.getFechaNac() != null ? usuarioAutenticado.getFechaNac().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) : "",
+                tipoCliente // <-- Pasamos el tipo de cliente (será null si no es un cliente)
         ));
-        // ------------------------------------
+        // -----------------------------------------------------------
     }
 
     // Endpoints de forgot-password y reset-password se mantienen igual

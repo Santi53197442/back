@@ -43,6 +43,9 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         this.usuarioRepository = usuarioRepository;
     }
 
+    @Autowired
+    private PrecioService precioService;
+
     @Transactional
     public PasajeResponseDTO comprarPasaje(CompraPasajeRequestDTO requestDTO) {
         logger.info("Intentando comprar pasaje para viaje ID {} por cliente ID {} en asiento {}",
@@ -341,18 +344,17 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
 
     @Transactional
     public List<PasajeResponseDTO> reservarAsientosTemporalmente(CompraMultiplePasajesRequestDTO requestDTO) {
-        // (La lógica es muy similar a comprar, pero con el estado RESERVADO)
-        // Reutilizamos el mismo DTO para simplicidad.
-        logger.info("Intentando reserva temporal para viaje ID {}, asientos {}", requestDTO.getViajeId(), requestDTO.getNumerosAsiento());
+        logger.info("Intentando reserva temporal para viaje ID {}, cliente ID {}, asientos {}",
+                requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumerosAsiento());
 
+        // 1. Obtener las entidades necesarias
         Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
                 .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
 
         Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
                 .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
 
-        // --- VALIDACIONES CLAVE ---
-        // (Similar a la compra: que el viaje esté programado, que haya asientos, que no estén ya vendidos o reservados)
+        // 2. Validar que los asientos no estén ya ocupados
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
             pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
                     .ifPresent(p -> {
@@ -362,6 +364,11 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                     });
         }
 
+        // 3. Calcular el precio final usando el PrecioService
+        double precioFinalConDescuento = precioService.calcularPrecioFinal(viaje.getPrecio(), cliente);
+        logger.info("Precio base: ${}. Precio final con descuento para cliente {}: ${}", viaje.getPrecio(), cliente.getId(), precioFinalConDescuento);
+
+        // 4. Crear los pasajes con el estado RESERVADO y el precio final
         List<Pasaje> pasajesReservados = new ArrayList<>();
         LocalDateTime fechaReserva = LocalDateTime.now(ZoneOffset.UTC);
 
@@ -370,17 +377,20 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
             pasaje.setCliente(cliente);
             pasaje.setDatosViaje(viaje);
             pasaje.setNumeroAsiento(numeroAsiento);
-            pasaje.setPrecio(viaje.getPrecio());
-            pasaje.setEstado(EstadoPasaje.RESERVADO); // <-- ESTADO CLAVE
-            pasaje.setFechaReserva(fechaReserva); // <-- MARCA DE TIEMPO CLAVE
+            pasaje.setEstado(EstadoPasaje.RESERVADO);
+            pasaje.setFechaReserva(fechaReserva);
+            pasaje.setPrecio(precioFinalConDescuento); // <-- Se guarda el precio con descuento
             pasajesReservados.add(pasaje);
         }
 
-        // Actualizamos el contador de asientos disponibles
+        // 5. Actualizar el contador de asientos del viaje y guardar los pasajes
         viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - requestDTO.getNumerosAsiento().size());
         viajeRepository.save(viaje);
 
-        return pasajeRepository.saveAll(pasajesReservados).stream()
+        List<Pasaje> pasajesGuardados = pasajeRepository.saveAll(pasajesReservados);
+
+        // 6. Devolver los DTOs
+        return pasajesGuardados.stream()
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());
     }

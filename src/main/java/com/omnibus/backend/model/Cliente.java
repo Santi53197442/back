@@ -20,9 +20,9 @@ import java.util.Collections;
 public class Cliente extends Usuario {
 
     // --- NUEVO CAMPO ---
-    @Enumerated(EnumType.STRING) // Guarda el nombre del enum ("COMUN", "JUBILADO") en la DB, no el número.
-    @Column(name = "tipo_cliente", nullable = false) // La columna no puede ser nula.
-    private TipoCliente tipo;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_cliente", nullable = false)
+    private TipoCliente tipo = TipoCliente.COMUN; // <-- AÑADIR VALOR POR DEFECTO
     // -------------------
 
     public Cliente() {

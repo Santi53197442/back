@@ -1,6 +1,8 @@
 // src/main/java/com/omnibus/backend/dto/AuthResponseDTO.java
 package com.omnibus.backend.dto;
 
+import com.omnibus.backend.model.TipoCliente;
+
 public class AuthResponseDTO {
     private String token;
     private Long id; // <--- AÑADE ESTE CAMPO PARA EL ID NUMÉRICO
@@ -11,12 +13,13 @@ public class AuthResponseDTO {
     private String ci;
     private String telefono;
     private String fechaNac; // String en formato YYYY-MM-DD
+    private TipoCliente tipoCliente;
 
     // Constructor por defecto (buena práctica)
     public AuthResponseDTO() {}
 
     // Constructor Actualizado para incluir el ID
-    public AuthResponseDTO(String token, Long id, String email, String rol, String nombre, String apellido, String ci, String telefono, String fechaNac) {
+    public AuthResponseDTO(String token, Long id, String email, String rol, String nombre, String apellido, String ci, String telefono, String fechaNac, TipoCliente tipoCliente) {
         this.token = token;
         this.id = id; // <--- ASIGNAR ID
         this.email = email;
@@ -26,6 +29,7 @@ public class AuthResponseDTO {
         this.ci = ci;
         this.telefono = telefono;
         this.fechaNac = fechaNac;
+        this.tipoCliente = tipoCliente;
     }
 
     // Getters
@@ -38,6 +42,8 @@ public class AuthResponseDTO {
     public String getCi() { return ci; }
     public String getTelefono() { return telefono; }
     public String getFechaNac() { return fechaNac; }
+    public TipoCliente getTipoCliente() { return tipoCliente; }
+
 
     // Setters (si los usas)
     public void setToken(String token) { this.token = token; }
@@ -49,4 +55,6 @@ public class AuthResponseDTO {
     public void setCi(String ci) { this.ci = ci; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
     public void setFechaNac(String fechaNac) { this.fechaNac = fechaNac; }
+    public void setTipoCliente(TipoCliente tipoCliente) { this.tipoCliente = tipoCliente; }
+
 }

@@ -32,24 +32,27 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
 
     private static final Logger logger = LoggerFactory.getLogger(pasajeService.class); // Corregido a PascalCase
 
+    // --- DECLARACIÓN DE DEPENDENCIAS ---
     private final PasajeRepository pasajeRepository;
     private final ViajeRepository viajeRepository;
     private final UsuarioRepository usuarioRepository;
+    private final PaypalService paypalService;
+    private final PrecioService precioService;
 
+    // --- CONSTRUCTOR ÚNICO Y CORREGIDO ---
+    // Spring usará este constructor para inyectar TODAS las dependencias necesarias.
     @Autowired
     public pasajeService(PasajeRepository pasajeRepository,
                          ViajeRepository viajeRepository,
-                         UsuarioRepository usuarioRepository) {
+                         UsuarioRepository usuarioRepository,
+                         PaypalService paypalService,
+                         PrecioService precioService) {
         this.pasajeRepository = pasajeRepository;
         this.viajeRepository = viajeRepository;
         this.usuarioRepository = usuarioRepository;
+        this.paypalService = paypalService;
+        this.precioService = precioService;
     }
-
-    @Autowired
-    private PaypalService paypalService;
-
-    @Autowired
-    private PrecioService precioService;
 
     @Transactional
     public PasajeResponseDTO comprarPasaje(CompraPasajeRequestDTO requestDTO) {

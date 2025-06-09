@@ -1,6 +1,7 @@
 // src/main/java/com/omnibus/backend/service/PasajeService.java
 package com.omnibus.backend.service;
 
+import com.omnibus.backend.dto.CompraMultiplePasajesRequestDTO;
 import com.omnibus.backend.dto.CompraPasajeRequestDTO;
 import com.omnibus.backend.dto.PasajeResponseDTO;
 import com.omnibus.backend.dto.PasajeStatsDTO;
@@ -18,10 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -301,5 +299,72 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                     ruta
             );
         }).collect(Collectors.toList());
+    }
+
+    @Transactional // <-- ¡MUY IMPORTANTE! Asegura la atomicidad de la operación.
+    public List<PasajeResponseDTO> comprarMultiplesPasajes(CompraMultiplePasajesRequestDTO requestDTO) {
+        logger.info("Iniciando compra múltiple para viaje ID {} por cliente ID {}, asientos {}",
+                requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumerosAsiento());
+
+        Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
+                .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
+
+        Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
+
+        if (viaje.getEstado() != EstadoViaje.PROGRAMADO) {
+            throw new IllegalStateException("Solo se pueden comprar pasajes para viajes en estado PROGRAMADO. Estado actual: " + viaje.getEstado());
+        }
+
+        int numAsientosAComprar = requestDTO.getNumerosAsiento().size();
+        if (viaje.getAsientosDisponibles() < numAsientosAComprar) {
+            throw new IllegalStateException("No hay suficientes asientos disponibles (" + viaje.getAsientosDisponibles() + ") para comprar " + numAsientosAComprar + " pasajes.");
+        }
+
+        Omnibus busAsignado = viaje.getBusAsignado();
+        if (busAsignado == null) {
+            throw new IllegalStateException("El viaje ID " + viaje.getId() + " no tiene un ómnibus asignado.");
+        }
+
+        List<Pasaje> pasajesAGuardar = new ArrayList<>();
+
+        // Validar todos los asientos ANTES de crear los pasajes
+        for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
+            if (numeroAsiento > busAsignado.getCapacidadAsientos() || numeroAsiento < 1) {
+                throw new IllegalArgumentException("Número de asiento " + numeroAsiento + " inválido para un ómnibus con capacidad " + busAsignado.getCapacidadAsientos() + " asientos.");
+            }
+
+            pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
+                    .ifPresent(pasajeExistente -> {
+                        if (pasajeExistente.getEstado() != EstadoPasaje.CANCELADO) {
+                            throw new IllegalStateException("El asiento " + numeroAsiento + " ya está ocupado (estado: " + pasajeExistente.getEstado() + ") para el viaje ID: " + viaje.getId());
+                        }
+                    });
+
+            // Crear el pasaje y añadirlo a la lista para guardar
+            Pasaje nuevoPasaje = new Pasaje();
+            nuevoPasaje.setCliente(cliente);
+            nuevoPasaje.setDatosViaje(viaje);
+            nuevoPasaje.setNumeroAsiento(numeroAsiento);
+            nuevoPasaje.setPrecio(viaje.getPrecio());
+            nuevoPasaje.setEstado(EstadoPasaje.VENDIDO);
+            // Podrías añadir el ID de la transacción de PayPal si lo pasas en el DTO
+            // nuevoPasaje.setPaypalTransactionId(requestDTO.getPaypalTransactionId());
+
+            pasajesAGuardar.add(nuevoPasaje);
+        }
+
+        // Actualizar el conteo de asientos disponibles en el viaje
+        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - numAsientosAComprar);
+        viajeRepository.save(viaje);
+
+        // Guardar todos los pasajes en la base de datos
+        List<Pasaje> pasajesGuardados = pasajeRepository.saveAll(pasajesAGuardar);
+        logger.info("{} pasajes creados exitosamente para el viaje ID {}", pasajesGuardados.size(), viaje.getId());
+
+        // Convertir a DTOs y devolver
+        return pasajesGuardados.stream()
+                .map(this::convertirAPasajeResponseDTO)
+                .collect(Collectors.toList());
     }
 }

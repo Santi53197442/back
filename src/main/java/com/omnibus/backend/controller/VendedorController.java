@@ -583,6 +583,39 @@ public class VendedorController {
         }
     }
 
+    @PostMapping("/pasajes/comprar-multiple")
+    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')")
+    public ResponseEntity<?> comprarMultiplesPasajes(@Valid @RequestBody CompraMultiplePasajesRequestDTO compraRequestDTO) {
+        try {
+            logger.info("API: Solicitud de compra múltiple: Viaje ID {}, Cliente ID {}, Asientos {}",
+                    compraRequestDTO.getViajeId(), compraRequestDTO.getClienteId(), compraRequestDTO.getNumerosAsiento());
+
+            List<PasajeResponseDTO> pasajesComprados = this.pasajeService.comprarMultiplesPasajes(compraRequestDTO);
+            logger.info("API: {} pasajes comprados exitosamente para el viaje ID {}", pasajesComprados.size(), compraRequestDTO.getViajeId());
+
+            // Opcional: Enviar email por cada pasaje comprado
+            pasajesComprados.forEach(pasaje -> {
+                try {
+                    asyncService.sendTicketEmailAsync(pasaje);
+                } catch (Exception e) {
+                    logger.error("Error al despachar email para pasaje {}. La compra fue exitosa.", pasaje.getId(), e);
+                }
+            });
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(pasajesComprados);
+        } catch (EntityNotFoundException e) {
+            logger.warn("API: Error en compra múltiple. Entidad no encontrada: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            logger.warn("API: Error en compra múltiple. Condición inválida: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("API: Error interno al comprar múltiples pasajes: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al procesar la compra de los pasajes."));
+        }
+    }
+
 
     @GetMapping("/viajes/{viajeId}/asientos-ocupados")
     @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO

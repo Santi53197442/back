@@ -17,6 +17,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -42,6 +44,9 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         this.viajeRepository = viajeRepository;
         this.usuarioRepository = usuarioRepository;
     }
+
+    @Autowired
+    private PaypalService paypalService;
 
     @Autowired
     private PrecioService precioService;
@@ -331,6 +336,9 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
             // --- ACTUALIZACIÓN ---
             pasaje.setEstado(EstadoPasaje.VENDIDO);
             pasaje.setFechaReserva(null); // Limpiamos la fecha de reserva
+            // Se asigna el mismo ID de transacción a todos los pasajes de esta compra múltiple.
+            pasaje.setPaypalTransactionId(requestDTO.getPaypalTransactionId());
+
             pasajesAConfirmar.add(pasaje);
         }
 
@@ -393,5 +401,62 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         return pasajesGuardados.stream()
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public String procesarDevolucionPasaje(Integer pasajeId) {
+        logger.info("Iniciando proceso de devolución para pasaje ID: {}", pasajeId);
+
+        // 1. Obtener el pasaje
+        Pasaje pasaje = pasajeRepository.findById(pasajeId)
+                .orElseThrow(() -> new EntityNotFoundException("Pasaje no encontrado con ID: " + pasajeId));
+
+        // 2. Validaciones de negocio
+        if (pasaje.getEstado() != EstadoPasaje.VENDIDO) {
+            throw new IllegalStateException("Solo se pueden devolver pasajes en estado 'VENDIDO'. Estado actual: " + pasaje.getEstado());
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        LocalDateTime fechaSalida = LocalDateTime.of(pasaje.getDatosViaje().getFecha(), pasaje.getDatosViaje().getHoraSalida());
+        if (ahora.plusHours(24).isAfter(fechaSalida)) {
+            throw new IllegalStateException("El plazo para la devolución ha expirado (se requieren 24hs de antelación).");
+        }
+
+        if (pasaje.getPaypalTransactionId() == null || pasaje.getPaypalTransactionId().isBlank()) {
+            throw new IllegalStateException("El pasaje no tiene un ID de transacción de PayPal asociado. No se puede reembolsar.");
+        }
+
+        // 3. Calcular monto a reembolsar (con 10% de penalización)
+        // ¡Correcto! Usamos el precio guardado en el pasaje, que ya incluye descuentos.
+        double precioPagado = pasaje.getPrecio();
+        double montoPenalizacion = precioPagado * 0.10;
+        double montoAReembolsar = precioPagado - montoPenalizacion;
+
+        // 4. Llamar a PayPal para el reembolso
+        JsonNode refundResponse = paypalService.refundPayment(pasaje.getPaypalTransactionId(), montoAReembolsar);
+
+        if (refundResponse == null || !"COMPLETED".equals(refundResponse.path("status").asText())) {
+            String status = refundResponse != null ? refundResponse.path("status").asText() : "N/A";
+            throw new RuntimeException("El reembolso en PayPal falló. Estado recibido: " + status);
+        }
+
+        String refundId = refundResponse.path("id").asText();
+
+        // 5. Actualizar la base de datos
+        pasaje.setEstado(EstadoPasaje.CANCELADO); // O un nuevo estado "DEVUELTO" si lo prefieres
+        pasaje.setPaypalRefundId(refundId);
+
+        Viaje viaje = pasaje.getDatosViaje();
+        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() + 1);
+
+        pasajeRepository.save(pasaje);
+        viajeRepository.save(viaje);
+
+        logger.info("Devolución exitosa para pasaje ID {}. Reembolsado: ${}. Nuevo estado: {}", pasajeId, montoAReembolsar, pasaje.getEstado());
+
+        // Aquí podrías llamar al servicio de notificaciones por email
+        // asyncService.sendRefundEmailAsync(pasaje, montoAReembolsar);
+
+        return String.format(Locale.US, "Devolución procesada con éxito. Se reembolsó un total de $%.2f.", montoAReembolsar);
     }
 }

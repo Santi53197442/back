@@ -15,6 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale; // <-- IMPORTACIÓN AÑADIDA
 
+import com.fasterxml.jackson.databind.JsonNode; // Importación necesaria
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 @Service
 public class PaypalService {
 
@@ -126,6 +130,41 @@ public class PaypalService {
         } catch (Exception e) {
             logger.error("Error al capturar la orden {} en PayPal", orderId, e);
             throw new RuntimeException("Error al capturar el pago de PayPal", e);
+        }
+    }
+
+    /**
+     * Realiza un reembolso de una transacción previamente capturada.
+     * @param captureId El ID de la transacción de PayPal (el que guardaste como paypalTransactionId).
+     * @param amountToRefund El monto a reembolsar.
+     * @return Un objeto JsonNode con la respuesta del reembolso de PayPal.
+     */
+    public JsonNode refundPayment(String captureId, double amountToRefund) {
+        String accessToken = getAccessToken();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        BigDecimal refundValue = BigDecimal.valueOf(amountToRefund).setScale(2, RoundingMode.HALF_UP);
+
+        String requestBody = String.format(Locale.US, """
+                {
+                  "amount": {
+                    "currency_code": "USD",
+                    "value": "%.2f"
+                  }
+                }
+                """, refundValue);
+
+        HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
+        String refundUrl = baseUrl + "/v2/payments/captures/" + captureId + "/refund";
+
+        try {
+            logger.info("Enviando a PayPal para reembolsar captura {}: {}", captureId, requestBody);
+            return restTemplate.postForObject(refundUrl, entity, JsonNode.class);
+        } catch (Exception e) {
+            logger.error("Error al reembolsar la captura {} en PayPal", captureId, e);
+            throw new RuntimeException("Error al procesar el reembolso con PayPal", e);
         }
     }
 }

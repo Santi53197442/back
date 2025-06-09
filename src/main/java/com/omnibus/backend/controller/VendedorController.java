@@ -753,4 +753,20 @@ public class VendedorController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
         }
     }
+
+    @PostMapping("/pasajes/{pasajeId}/devolucion")
+    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')")
+    public ResponseEntity<?> devolverPasaje(@PathVariable Integer pasajeId) {
+        try {
+            String mensaje = pasajeService.procesarDevolucionPasaje(pasajeId);
+            return ResponseEntity.ok(Map.of("message", mensaje));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error interno al procesar devolución para pasaje {}: {}", pasajeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Error interno al procesar la devolución."));
+        }
+    }
 }

@@ -43,6 +43,13 @@ public class Pasaje {
     @Column(name = "fecha_reserva") // <-- NUEVO CAMPO
     private LocalDateTime fechaReserva;
 
+    // --- NUEVOS CAMPOS AÑADIDOS ---
+    @Column(name = "paypal_transaction_id", length = 50)
+    private String paypalTransactionId;
+
+    @Column(name = "paypal_refund_id", length = 50)
+    private String paypalRefundId;
+
 
     // Constructores
     public Pasaje() {
@@ -56,6 +63,8 @@ public class Pasaje {
         this.datosViaje = datosViaje;
         this.numeroAsiento = numeroAsiento;
     }
+
+
 
     // Getters y Setters
     public Integer getId() {
@@ -112,6 +121,22 @@ public class Pasaje {
 
     public void setFechaReserva(LocalDateTime fechaReserva) {
         this.fechaReserva = fechaReserva;
+    }
+
+    public String getPaypalTransactionId() {
+        return paypalTransactionId;
+    }
+
+    public void setPaypalTransactionId(String paypalTransactionId) {
+        this.paypalTransactionId = paypalTransactionId;
+    }
+
+    public String getPaypalRefundId() {
+        return paypalRefundId;
+    }
+
+    public void setPaypalRefundId(String paypalRefundId) {
+        this.paypalRefundId = paypalRefundId;
     }
 
     @Override

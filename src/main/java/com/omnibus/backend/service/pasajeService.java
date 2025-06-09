@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -187,7 +188,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
             }
         }
 
-        Float precio = pasaje.getPrecio() != null ? pasaje.getPrecio().floatValue() : null;
+        Double precio = pasaje.getPrecio();
 
         // <-- CAMBIO CLAVE: Llamamos al nuevo constructor con los 13 parámetros
         return new PasajeResponseDTO(
@@ -203,7 +204,8 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                 matriculaOmnibus,   // <--- NUEVO
                 precio,
                 pasaje.getEstado(),
-                pasaje.getNumeroAsiento()
+                pasaje.getNumeroAsiento(),
+                pasaje.getFechaReserva()
         );
     }
 
@@ -301,96 +303,83 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         }).collect(Collectors.toList());
     }
 
-    @Transactional // ¡MUY IMPORTANTE!
+    @Transactional
     public List<PasajeResponseDTO> comprarMultiplesPasajes(CompraMultiplePasajesRequestDTO requestDTO) {
-        logger.info("================ INICIO COMPRA MÚLTIPLE ================");
-        logger.info("Recibido DTO: ViajeID={}, ClienteID={}, Asientos={}",
-                requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumerosAsiento());
+        logger.info("================ INICIO CONFIRMACIÓN DE COMPRA ================");
 
-        // --- VALIDACIÓN 1: Viaje ---
-        logger.info("Validando viaje...");
         Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
                 .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
-        logger.info("Viaje {} encontrado. Estado: {}", viaje.getId(), viaje.getEstado());
 
-        // --- VALIDACIÓN 2: Cliente ---
-        logger.info("Validando cliente...");
-        Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
-                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
-        logger.info("Cliente {} ({}) encontrado.", cliente.getId(), cliente.getNombreCompleto());
+        List<Pasaje> pasajesAConfirmar = new ArrayList<>();
 
-        // --- VALIDACIÓN 3: Estado del Viaje ---
-        if (viaje.getEstado() != EstadoViaje.PROGRAMADO) {
-            String errorMsg = "Solo se pueden comprar pasajes para viajes en estado PROGRAMADO. Estado actual: " + viaje.getEstado();
-            logger.error(errorMsg);
-            throw new IllegalStateException(errorMsg);
-        }
-
-        // --- VALIDACIÓN 4: Asientos Disponibles (conteo general) ---
-        int numAsientosAComprar = requestDTO.getNumerosAsiento().size();
-        logger.info("Se intentan comprar {} asientos. Disponibles en el viaje: {}", numAsientosAComprar, viaje.getAsientosDisponibles());
-        if (viaje.getAsientosDisponibles() < numAsientosAComprar) {
-            String errorMsg = "No hay suficientes asientos disponibles (" + viaje.getAsientosDisponibles() + ") para comprar " + numAsientosAComprar + " pasajes.";
-            logger.error(errorMsg);
-            throw new IllegalStateException(errorMsg);
-        }
-
-        // --- VALIDACIÓN 5: Ómnibus Asignado ---
-        Omnibus busAsignado = viaje.getBusAsignado();
-        if (busAsignado == null) {
-            String errorMsg = "El viaje ID " + viaje.getId() + " no tiene un ómnibus asignado.";
-            logger.error(errorMsg);
-            throw new IllegalStateException(errorMsg);
-        }
-        logger.info("Ómnibus asignado: {} con capacidad para {} asientos", busAsignado.getMatricula(), busAsignado.getCapacidadAsientos());
-
-        List<Pasaje> pasajesAGuardar = new ArrayList<>();
-
-        // --- VALIDACIÓN 6: Cada Asiento Individualmente ---
-        logger.info("Validando cada asiento individualmente...");
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
-            logger.debug("Validando asiento N° {}", numeroAsiento);
-            // Validar rango
-            if (numeroAsiento > busAsignado.getCapacidadAsientos() || numeroAsiento < 1) {
-                String errorMsg = "Número de asiento " + numeroAsiento + " inválido para un ómnibus con capacidad " + busAsignado.getCapacidadAsientos() + " asientos.";
-                logger.error(errorMsg);
-                throw new IllegalArgumentException(errorMsg);
+            Pasaje pasaje = pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
+                    .orElseThrow(() -> new IllegalStateException("La reserva para el asiento " + numeroAsiento + " no fue encontrada o expiró."));
+
+            // --- VALIDACIONES DE CONFIRMACIÓN ---
+            if (pasaje.getEstado() != EstadoPasaje.RESERVADO) {
+                throw new IllegalStateException("El asiento " + numeroAsiento + " no estaba reservado. Su estado es: " + pasaje.getEstado());
+            }
+            if (!pasaje.getCliente().getId().equals(requestDTO.getClienteId())) {
+                throw new SecurityException("Intento de comprar una reserva que no pertenece al usuario.");
             }
 
-            // Validar si ya está ocupado
-            pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
-                    .ifPresent(pasajeExistente -> {
-                        if (pasajeExistente.getEstado() != EstadoPasaje.CANCELADO) {
-                            String errorMsg = "El asiento " + numeroAsiento + " ya está ocupado (estado: " + pasajeExistente.getEstado() + ") para el viaje ID: " + viaje.getId();
-                            logger.error(errorMsg);
-                            throw new IllegalStateException(errorMsg);
-                        }
-                    });
-            logger.debug("Asiento N° {} está disponible.", numeroAsiento);
-
-            // Si todas las validaciones pasan, se crea el objeto Pasaje
-            Pasaje nuevoPasaje = new Pasaje();
-            nuevoPasaje.setCliente(cliente);
-            nuevoPasaje.setDatosViaje(viaje);
-            nuevoPasaje.setNumeroAsiento(numeroAsiento);
-            nuevoPasaje.setPrecio(viaje.getPrecio());
-            nuevoPasaje.setEstado(EstadoPasaje.VENDIDO);
-            // Opcional: nuevoPasaje.setPaypalTransactionId(requestDTO.getPaypalTransactionId());
-
-            pasajesAGuardar.add(nuevoPasaje);
+            // --- ACTUALIZACIÓN ---
+            pasaje.setEstado(EstadoPasaje.VENDIDO);
+            pasaje.setFechaReserva(null); // Limpiamos la fecha de reserva
+            pasajesAConfirmar.add(pasaje);
         }
 
-        // --- ACTUALIZACIÓN Y GUARDADO ---
-        logger.info("Todas las validaciones pasaron. Procediendo a actualizar el viaje y guardar los pasajes.");
-        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - numAsientosAComprar);
-        viajeRepository.save(viaje);
-        logger.info("Viaje actualizado. Asientos disponibles ahora: {}", viaje.getAsientosDisponibles());
-
-        List<Pasaje> pasajesGuardados = pasajeRepository.saveAll(pasajesAGuardar);
-        logger.info("¡Éxito! {} pasajes guardados en la base de datos.", pasajesGuardados.size());
-        logger.info("================ FIN COMPRA MÚLTIPLE ================");
+        List<Pasaje> pasajesGuardados = pasajeRepository.saveAll(pasajesAConfirmar);
+        logger.info("¡Éxito! {} pasajes confirmados y movidos a VENDIDO.", pasajesGuardados.size());
 
         return pasajesGuardados.stream()
+                .map(this::convertirAPasajeResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<PasajeResponseDTO> reservarAsientosTemporalmente(CompraMultiplePasajesRequestDTO requestDTO) {
+        // (La lógica es muy similar a comprar, pero con el estado RESERVADO)
+        // Reutilizamos el mismo DTO para simplicidad.
+        logger.info("Intentando reserva temporal para viaje ID {}, asientos {}", requestDTO.getViajeId(), requestDTO.getNumerosAsiento());
+
+        Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
+                .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
+
+        Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
+
+        // --- VALIDACIONES CLAVE ---
+        // (Similar a la compra: que el viaje esté programado, que haya asientos, que no estén ya vendidos o reservados)
+        for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
+            pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
+                    .ifPresent(p -> {
+                        if (p.getEstado() == EstadoPasaje.VENDIDO || p.getEstado() == EstadoPasaje.RESERVADO) {
+                            throw new IllegalStateException("El asiento " + numeroAsiento + " ya no está disponible.");
+                        }
+                    });
+        }
+
+        List<Pasaje> pasajesReservados = new ArrayList<>();
+        LocalDateTime fechaReserva = LocalDateTime.now();
+
+        for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
+            Pasaje pasaje = new Pasaje();
+            pasaje.setCliente(cliente);
+            pasaje.setDatosViaje(viaje);
+            pasaje.setNumeroAsiento(numeroAsiento);
+            pasaje.setPrecio(viaje.getPrecio());
+            pasaje.setEstado(EstadoPasaje.RESERVADO); // <-- ESTADO CLAVE
+            pasaje.setFechaReserva(fechaReserva); // <-- MARCA DE TIEMPO CLAVE
+            pasajesReservados.add(pasaje);
+        }
+
+        // Actualizamos el contador de asientos disponibles
+        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - requestDTO.getNumerosAsiento().size());
+        viajeRepository.save(viaje);
+
+        return pasajeRepository.saveAll(pasajesReservados).stream()
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());
     }

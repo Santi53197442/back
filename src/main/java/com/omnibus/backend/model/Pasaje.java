@@ -4,6 +4,8 @@ package com.omnibus.backend.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Entity
@@ -37,6 +39,10 @@ public class Pasaje {
     @Min(value = 1, message = "El número de asiento debe ser al menos 1.")
     @Column(name = "numero_asiento", nullable = false)
     private Integer numeroAsiento;
+
+    @Column(name = "fecha_reserva") // <-- NUEVO CAMPO
+    private LocalDateTime fechaReserva;
+
 
     // Constructores
     public Pasaje() {
@@ -98,6 +104,14 @@ public class Pasaje {
 
     public void setNumeroAsiento(Integer numeroAsiento) {
         this.numeroAsiento = numeroAsiento;
+    }
+
+    public LocalDateTime getFechaReserva() {
+        return fechaReserva;
+    }
+
+    public void setFechaReserva(LocalDateTime fechaReserva) {
+        this.fechaReserva = fechaReserva;
     }
 
     @Override

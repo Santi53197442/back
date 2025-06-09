@@ -7,6 +7,7 @@ import com.omnibus.backend.model.Viaje;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,4 +37,6 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> { // ID
     Optional<Pasaje> findByDatosViajeAndNumeroAsiento(Viaje viaje, Integer numeroAsiento);
 
     List<Pasaje> findByClienteId(Long clienteId);
+
+    List<Pasaje> findByEstadoAndFechaReservaBefore(EstadoPasaje estado, LocalDateTime fecha);
 }

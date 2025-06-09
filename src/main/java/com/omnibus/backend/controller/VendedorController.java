@@ -45,6 +45,7 @@ import org.springframework.context.annotation.Lazy;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -727,6 +728,23 @@ public class VendedorController {
             logger.error("Error interno al obtener estadísticas de pasajes: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Error interno al procesar la solicitud de estadísticas de ventas."));
+        }
+    }
+
+    // En VendedorController.java
+    @PostMapping("/pasajes/reservar-temporalmente")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'VENDEDOR', 'ADMINISTRADOR')")
+    public ResponseEntity<?> reservarAsientosTemporalmente(@Valid @RequestBody CompraMultiplePasajesRequestDTO reservaRequestDTO) {
+        try {
+            // Reutilizamos el DTO de compra. Solo necesitamos viajeId, clienteId y numerosAsiento.
+            List<PasajeResponseDTO> pasajesReservados = pasajeService.reservarAsientosTemporalmente(reservaRequestDTO);
+            // Devolvemos solo la información necesaria: la fecha de expiración.
+            LocalDateTime expiracion = pasajesReservados.get(0).getFechaReserva().plusMinutes(10);
+            return ResponseEntity.ok(Map.of("expiracion", expiracion.toString()));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
         }
     }
 }

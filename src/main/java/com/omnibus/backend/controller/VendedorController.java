@@ -682,4 +682,18 @@ public class VendedorController {
                     .body(Map.of("message", "Error interno al procesar la solicitud de estadísticas."));
         }
     }
+
+    @GetMapping("/pasajes/estadisticas")
+    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')")
+    public ResponseEntity<?> obtenerEstadisticasDePasajes() {
+        try {
+            logger.info("Solicitud para obtener datos para estadísticas de pasajes.");
+            List<PasajeStatsDTO> datos = pasajeService.obtenerDatosParaEstadisticas();
+            return ResponseEntity.ok(datos);
+        } catch (Exception e) {
+            logger.error("Error interno al obtener estadísticas de pasajes: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al procesar la solicitud de estadísticas de ventas."));
+        }
+    }
 }

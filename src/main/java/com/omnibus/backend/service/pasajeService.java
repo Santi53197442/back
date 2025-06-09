@@ -3,6 +3,7 @@ package com.omnibus.backend.service;
 
 import com.omnibus.backend.dto.CompraPasajeRequestDTO;
 import com.omnibus.backend.dto.PasajeResponseDTO;
+import com.omnibus.backend.dto.PasajeStatsDTO;
 import com.omnibus.backend.model.*;
 import com.omnibus.backend.repository.PasajeRepository;
 import com.omnibus.backend.repository.UsuarioRepository;
@@ -282,5 +283,23 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         return pasajesFiltrados.stream()
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    public List<PasajeStatsDTO> obtenerDatosParaEstadisticas() {
+        List<Pasaje> pasajes = pasajeRepository.findAll();
+
+        return pasajes.stream().map(pasaje -> {
+            // Construimos la ruta a partir del viaje asociado
+            String origen = pasaje.getDatosViaje().getOrigen().getNombre();
+            String destino = pasaje.getDatosViaje().getDestino().getNombre();
+            String ruta = origen + " - " + destino;
+
+            return new PasajeStatsDTO(
+                    pasaje.getPrecio(),
+                    pasaje.getEstado(),
+                    pasaje.getDatosViaje().getFecha(),
+                    ruta
+            );
+        }).collect(Collectors.toList());
     }
 }

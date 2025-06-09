@@ -459,4 +459,17 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
 
         return String.format(Locale.US, "Devolución procesada con éxito. Se reembolsó un total de $%.2f.", montoAReembolsar);
     }
+    // --- NUEVO MÉTODO PARA BUSCAR UN PASAJE POR ID ---
+    @Transactional(readOnly = true)
+    public PasajeResponseDTO obtenerPasajePorId(Integer pasajeId) {
+        logger.info("Buscando detalles del pasaje con ID: {}", pasajeId);
+        Pasaje pasaje = pasajeRepository.findById(pasajeId)
+                .orElseThrow(() -> {
+                    logger.warn("No se encontró el pasaje con ID: {}", pasajeId);
+                    return new EntityNotFoundException("Pasaje no encontrado con ID: " + pasajeId);
+                });
+
+        // Reutilizamos el método de conversión que ya tienes
+        return convertirAPasajeResponseDTO(pasaje);
+    }
 }

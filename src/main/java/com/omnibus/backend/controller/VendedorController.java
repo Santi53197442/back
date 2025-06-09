@@ -753,6 +753,20 @@ public class VendedorController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", e.getMessage()));
         }
     }
+    // --- NUEVO ENDPOINT PARA OBTENER DETALLES DE UN PASAJE ---
+    @GetMapping("/pasajes/{pasajeId}")
+    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')")
+    public ResponseEntity<?> obtenerDetallesPasaje(@PathVariable Integer pasajeId) {
+        try {
+            PasajeResponseDTO pasaje = pasajeService.obtenerPasajePorId(pasajeId);
+            return ResponseEntity.ok(pasaje);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error interno al obtener detalles del pasaje {}: {}", pasajeId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Error interno al obtener los detalles del pasaje."));
+        }
+    }
 
     @PostMapping("/pasajes/{pasajeId}/devolucion")
     @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')")

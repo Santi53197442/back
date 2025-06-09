@@ -4,6 +4,7 @@ import com.omnibus.backend.dto.CreatePrivilegedUserDTO;
 import com.omnibus.backend.dto.UserViewDTO;
 // --- IMPORTACIONES PARA ESTADÍSTICAS ---
 
+import com.omnibus.backend.dto.UsuarioStatsDTO;
 import com.omnibus.backend.model.Administrador;
 import com.omnibus.backend.model.Cliente;
 import com.omnibus.backend.model.Usuario;
@@ -277,6 +278,20 @@ public class AdminController {
             return ResponseEntity.noContent().build();
         } catch (UsernameNotFoundException e) {
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/usuarios/estadisticas")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public ResponseEntity<?> obtenerEstadisticasDeUsuarios() {
+        try {
+            logger.info("Solicitud para obtener datos para estadísticas de usuarios.");
+            List<UsuarioStatsDTO> datos = userService.obtenerDatosParaEstadisticas();
+            return ResponseEntity.ok(datos);
+        } catch (Exception e) {
+            logger.error("Error interno al obtener estadísticas de usuarios: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno al procesar la solicitud de estadísticas de usuarios."));
         }
     }
 

@@ -2,7 +2,8 @@ package com.omnibus.backend.service;
 
 import com.omnibus.backend.dto.UpdateUserDTO;
 import com.omnibus.backend.dto.UserProfileDTO;
-import com.omnibus.backend.model.Usuario;
+import com.omnibus.backend.dto.UsuarioStatsDTO;
+import com.omnibus.backend.model.*;
 import com.omnibus.backend.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -14,8 +15,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -178,5 +181,30 @@ public class UserService {
             throw new UsernameNotFoundException("Usuario no encontrado con ID: " + userId);
         }
         usuarioRepository.deleteById(userId);
+    }
+
+
+    public List<UsuarioStatsDTO> obtenerDatosParaEstadisticas() {
+        List<Usuario> usuarios = usuarioRepository.findAll();
+
+        return usuarios.stream().map(usuario -> {
+            String rol = "DESCONOCIDO";
+            TipoCliente tipoCliente = null;
+
+            if (usuario instanceof Cliente) {
+                rol = "CLIENTE";
+                tipoCliente = ((Cliente) usuario).getTipo();
+            } else if (usuario instanceof Vendedor) {
+                rol = "VENDEDOR";
+            } else if (usuario instanceof Administrador) {
+                rol = "ADMINISTRADOR";
+            }
+
+            return new UsuarioStatsDTO(
+                    rol,
+                    usuario.getFechaCreacion(),
+                    tipoCliente
+            );
+        }).collect(Collectors.toList());
     }
 }

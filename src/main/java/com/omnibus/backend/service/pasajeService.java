@@ -301,68 +301,95 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         }).collect(Collectors.toList());
     }
 
-    @Transactional // <-- ¡MUY IMPORTANTE! Asegura la atomicidad de la operación.
+    @Transactional // ¡MUY IMPORTANTE!
     public List<PasajeResponseDTO> comprarMultiplesPasajes(CompraMultiplePasajesRequestDTO requestDTO) {
-        logger.info("Iniciando compra múltiple para viaje ID {} por cliente ID {}, asientos {}",
+        logger.info("================ INICIO COMPRA MÚLTIPLE ================");
+        logger.info("Recibido DTO: ViajeID={}, ClienteID={}, Asientos={}",
                 requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumerosAsiento());
 
+        // --- VALIDACIÓN 1: Viaje ---
+        logger.info("Validando viaje...");
         Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
                 .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
+        logger.info("Viaje {} encontrado. Estado: {}", viaje.getId(), viaje.getEstado());
 
+        // --- VALIDACIÓN 2: Cliente ---
+        logger.info("Validando cliente...");
         Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
                 .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
+        logger.info("Cliente {} ({}) encontrado.", cliente.getId(), cliente.getNombreCompleto());
 
+        // --- VALIDACIÓN 3: Estado del Viaje ---
         if (viaje.getEstado() != EstadoViaje.PROGRAMADO) {
-            throw new IllegalStateException("Solo se pueden comprar pasajes para viajes en estado PROGRAMADO. Estado actual: " + viaje.getEstado());
+            String errorMsg = "Solo se pueden comprar pasajes para viajes en estado PROGRAMADO. Estado actual: " + viaje.getEstado();
+            logger.error(errorMsg);
+            throw new IllegalStateException(errorMsg);
         }
 
+        // --- VALIDACIÓN 4: Asientos Disponibles (conteo general) ---
         int numAsientosAComprar = requestDTO.getNumerosAsiento().size();
+        logger.info("Se intentan comprar {} asientos. Disponibles en el viaje: {}", numAsientosAComprar, viaje.getAsientosDisponibles());
         if (viaje.getAsientosDisponibles() < numAsientosAComprar) {
-            throw new IllegalStateException("No hay suficientes asientos disponibles (" + viaje.getAsientosDisponibles() + ") para comprar " + numAsientosAComprar + " pasajes.");
+            String errorMsg = "No hay suficientes asientos disponibles (" + viaje.getAsientosDisponibles() + ") para comprar " + numAsientosAComprar + " pasajes.";
+            logger.error(errorMsg);
+            throw new IllegalStateException(errorMsg);
         }
 
+        // --- VALIDACIÓN 5: Ómnibus Asignado ---
         Omnibus busAsignado = viaje.getBusAsignado();
         if (busAsignado == null) {
-            throw new IllegalStateException("El viaje ID " + viaje.getId() + " no tiene un ómnibus asignado.");
+            String errorMsg = "El viaje ID " + viaje.getId() + " no tiene un ómnibus asignado.";
+            logger.error(errorMsg);
+            throw new IllegalStateException(errorMsg);
         }
+        logger.info("Ómnibus asignado: {} con capacidad para {} asientos", busAsignado.getMatricula(), busAsignado.getCapacidadAsientos());
 
         List<Pasaje> pasajesAGuardar = new ArrayList<>();
 
-        // Validar todos los asientos ANTES de crear los pasajes
+        // --- VALIDACIÓN 6: Cada Asiento Individualmente ---
+        logger.info("Validando cada asiento individualmente...");
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
+            logger.debug("Validando asiento N° {}", numeroAsiento);
+            // Validar rango
             if (numeroAsiento > busAsignado.getCapacidadAsientos() || numeroAsiento < 1) {
-                throw new IllegalArgumentException("Número de asiento " + numeroAsiento + " inválido para un ómnibus con capacidad " + busAsignado.getCapacidadAsientos() + " asientos.");
+                String errorMsg = "Número de asiento " + numeroAsiento + " inválido para un ómnibus con capacidad " + busAsignado.getCapacidadAsientos() + " asientos.";
+                logger.error(errorMsg);
+                throw new IllegalArgumentException(errorMsg);
             }
 
+            // Validar si ya está ocupado
             pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
                     .ifPresent(pasajeExistente -> {
                         if (pasajeExistente.getEstado() != EstadoPasaje.CANCELADO) {
-                            throw new IllegalStateException("El asiento " + numeroAsiento + " ya está ocupado (estado: " + pasajeExistente.getEstado() + ") para el viaje ID: " + viaje.getId());
+                            String errorMsg = "El asiento " + numeroAsiento + " ya está ocupado (estado: " + pasajeExistente.getEstado() + ") para el viaje ID: " + viaje.getId();
+                            logger.error(errorMsg);
+                            throw new IllegalStateException(errorMsg);
                         }
                     });
+            logger.debug("Asiento N° {} está disponible.", numeroAsiento);
 
-            // Crear el pasaje y añadirlo a la lista para guardar
+            // Si todas las validaciones pasan, se crea el objeto Pasaje
             Pasaje nuevoPasaje = new Pasaje();
             nuevoPasaje.setCliente(cliente);
             nuevoPasaje.setDatosViaje(viaje);
             nuevoPasaje.setNumeroAsiento(numeroAsiento);
             nuevoPasaje.setPrecio(viaje.getPrecio());
             nuevoPasaje.setEstado(EstadoPasaje.VENDIDO);
-            // Podrías añadir el ID de la transacción de PayPal si lo pasas en el DTO
-            // nuevoPasaje.setPaypalTransactionId(requestDTO.getPaypalTransactionId());
+            // Opcional: nuevoPasaje.setPaypalTransactionId(requestDTO.getPaypalTransactionId());
 
             pasajesAGuardar.add(nuevoPasaje);
         }
 
-        // Actualizar el conteo de asientos disponibles en el viaje
+        // --- ACTUALIZACIÓN Y GUARDADO ---
+        logger.info("Todas las validaciones pasaron. Procediendo a actualizar el viaje y guardar los pasajes.");
         viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - numAsientosAComprar);
         viajeRepository.save(viaje);
+        logger.info("Viaje actualizado. Asientos disponibles ahora: {}", viaje.getAsientosDisponibles());
 
-        // Guardar todos los pasajes en la base de datos
         List<Pasaje> pasajesGuardados = pasajeRepository.saveAll(pasajesAGuardar);
-        logger.info("{} pasajes creados exitosamente para el viaje ID {}", pasajesGuardados.size(), viaje.getId());
+        logger.info("¡Éxito! {} pasajes guardados en la base de datos.", pasajesGuardados.size());
+        logger.info("================ FIN COMPRA MÚLTIPLE ================");
 
-        // Convertir a DTOs y devolver
         return pasajesGuardados.stream()
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());

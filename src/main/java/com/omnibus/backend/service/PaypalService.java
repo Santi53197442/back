@@ -112,9 +112,9 @@ public class PaypalService {
     /**
      * Captura (finaliza) el pago de una orden que ya ha sido aprobada por el usuario.
      * @param orderId El ID de la orden de PayPal a capturar.
-     * @return Un objeto PaypalCaptureResponse con los detalles completos de la transacción.
+     * @return Un objeto JsonNode con la respuesta COMPLETA de la API de captura de PayPal.
      */
-    public PaypalCaptureResponse captureOrder(String orderId) {
+    public JsonNode captureOrder(String orderId) { // <-- 1. CAMBIO EN EL TIPO DE RETORNO
         String accessToken = getAccessToken();
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + accessToken);
@@ -126,7 +126,12 @@ public class PaypalService {
 
         try {
             logger.info("Intentando capturar orden de PayPal con ID: {}", orderId);
-            return restTemplate.postForObject(baseUrl + "/v2/checkout/orders/" + orderId + "/capture", entity, PaypalCaptureResponse.class);
+            // 2. CAMBIO EN LA CLASE DE RESPUESTA ESPERADA
+            return restTemplate.postForObject(
+                    baseUrl + "/v2/checkout/orders/" + orderId + "/capture",
+                    entity,
+                    JsonNode.class // <-- Le decimos a RestTemplate que no intente mapear a un DTO, sino que nos dé el JSON crudo.
+            );
         } catch (Exception e) {
             logger.error("Error al capturar la orden {} en PayPal", orderId, e);
             throw new RuntimeException("Error al capturar el pago de PayPal", e);

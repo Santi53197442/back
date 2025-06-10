@@ -44,21 +44,20 @@ public class PaypalController {
         }
     }
 
-    // 3. --- MÉTODO "captureOrder" (sin cambios funcionales, pero con logging mejorado) ---
-    // Este método ya estaba bien, no necesita cambios en su lógica.
     @PostMapping("/orders/{orderId}/capture")
-    public ResponseEntity<PaypalCaptureResponse> captureOrder(@PathVariable String orderId) {
+    public ResponseEntity<JsonNode> captureOrder(@PathVariable String orderId) { // <-- CAMBIA EL TIPO DE RETORNO AQUÍ
         logger.info("Recibida petición para capturar la orden de PayPal: {}", orderId);
         try {
-            PaypalCaptureResponse captureData = paypalService.captureOrder(orderId);
+            JsonNode captureData = paypalService.captureOrder(orderId); // Recibe el JsonNode
 
-            if (captureData.getStatus() != null && captureData.getStatus().equals("COMPLETED")) {
+            if (captureData.has("status") && captureData.get("status").asText().equals("COMPLETED")) {
                 logger.info("Pago completado con éxito para la orden: {}", orderId);
             } else {
-                logger.warn("El pago para la orden {} no fue completado. Estado: {}", orderId, captureData.getStatus());
+                String status = captureData.has("status") ? captureData.get("status").asText() : "N/A";
+                logger.warn("El pago para la orden {} no fue completado. Estado: {}", orderId, status);
             }
 
-            return ResponseEntity.ok(captureData);
+            return ResponseEntity.ok(captureData); // Devuelve el JsonNode completo al frontend
         } catch (Exception e) {
             logger.error("Error al capturar la orden de PayPal {}", orderId, e);
             return ResponseEntity.status(500).build();

@@ -323,9 +323,10 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                 .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
 
         List<Pasaje> pasajesAConfirmar = new ArrayList<>();
+        List<EstadoPasaje> estadosActivos = List.of(EstadoPasaje.VENDIDO, EstadoPasaje.RESERVADO);
 
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
-            Pasaje pasaje = pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
+            Pasaje pasaje = pasajeRepository.findByDatosViajeAndNumeroAsientoAndEstado(viaje, numeroAsiento, EstadoPasaje.RESERVADO)
                     .orElseThrow(() -> new IllegalStateException("La reserva para el asiento " + numeroAsiento + " no fue encontrada o expiró."));
 
             // --- VALIDACIONES DE CONFIRMACIÓN ---
@@ -358,28 +359,32 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         logger.info("Intentando reserva temporal para viaje ID {}, cliente ID {}, asientos {}",
                 requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumerosAsiento());
 
-        // 1. Obtener las entidades necesarias
+        // 1. Obtener las entidades necesarias (SIN CAMBIOS)
         Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
                 .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
 
         Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
                 .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
 
-        // 2. Validar que los asientos no estén ya ocupados
+        // 2. Validar que los asientos no estén ya ocupados (CON LA CORRECCIÓN)
+        // Se define la lista de estados que consideramos "ocupados" o "bloqueados".
+        List<EstadoPasaje> estadosActivos = List.of(EstadoPasaje.VENDIDO, EstadoPasaje.RESERVADO);
+
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
-            pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, numeroAsiento)
+            // Se utiliza el nuevo método del repositorio que busca por viaje, asiento Y estado.
+            // Esto ignora los pasajes CANCELADOS para el mismo asiento.
+            pasajeRepository.findByDatosViajeAndNumeroAsientoAndEstadoIn(viaje, numeroAsiento, estadosActivos)
                     .ifPresent(p -> {
-                        if (p.getEstado() == EstadoPasaje.VENDIDO || p.getEstado() == EstadoPasaje.RESERVADO) {
-                            throw new IllegalStateException("El asiento " + numeroAsiento + " ya no está disponible.");
-                        }
+                        // La lógica interna de lanzar la excepción es la misma.
+                        throw new IllegalStateException("El asiento " + numeroAsiento + " ya no está disponible.");
                     });
         }
 
-        // 3. Calcular el precio final usando el PrecioService
+        // 3. Calcular el precio final usando el PrecioService (SIN CAMBIOS)
         double precioFinalConDescuento = precioService.calcularPrecioFinal(viaje.getPrecio(), cliente);
         logger.info("Precio base: ${}. Precio final con descuento para cliente {}: ${}", viaje.getPrecio(), cliente.getId(), precioFinalConDescuento);
 
-        // 4. Crear los pasajes con el estado RESERVADO y el precio final
+        // 4. Crear los pasajes con el estado RESERVADO y el precio final (SIN CAMBIOS)
         List<Pasaje> pasajesReservados = new ArrayList<>();
         LocalDateTime fechaReserva = LocalDateTime.now(ZoneOffset.UTC);
 
@@ -390,17 +395,17 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
             pasaje.setNumeroAsiento(numeroAsiento);
             pasaje.setEstado(EstadoPasaje.RESERVADO);
             pasaje.setFechaReserva(fechaReserva);
-            pasaje.setPrecio(precioFinalConDescuento); // <-- Se guarda el precio con descuento
+            pasaje.setPrecio(precioFinalConDescuento);
             pasajesReservados.add(pasaje);
         }
 
-        // 5. Actualizar el contador de asientos del viaje y guardar los pasajes
+        // 5. Actualizar el contador de asientos del viaje y guardar los pasajes (SIN CAMBIOS)
         viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - requestDTO.getNumerosAsiento().size());
         viajeRepository.save(viaje);
 
         List<Pasaje> pasajesGuardados = pasajeRepository.saveAll(pasajesReservados);
 
-        // 6. Devolver los DTOs
+        // 6. Devolver los DTOs (SIN CAMBIOS)
         return pasajesGuardados.stream()
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());

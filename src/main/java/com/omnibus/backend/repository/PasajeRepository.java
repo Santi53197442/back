@@ -12,31 +12,52 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PasajeRepository extends JpaRepository<Pasaje, Integer> { // ID es Integer
+public interface PasajeRepository extends JpaRepository<Pasaje, Integer> {
 
-    /**
-     * Cuenta los pasajes para un viaje específico que tienen un estado particular.
-     * Usaremos esto para contar los asientos vendidos (pasajes con estado VENDIDO o RESERVADO).
-     */
+    // --- MÉTODOS EXISTENTES QUE SE MANTIENEN ---
+
     long countByDatosViajeAndEstado(Viaje datosViaje, EstadoPasaje estado);
 
-    /**
-     * Cuenta los pasajes para un viaje específico que tienen alguno de los estados proporcionados.
-     */
     long countByDatosViajeAndEstadoIn(Viaje datosViaje, List<EstadoPasaje> estados);
-
-    // Podrías necesitar otros métodos, por ejemplo:
-    // List<Pasaje> findByDatosViaje(Viaje datosViaje);
-    // List<Pasaje> findByCliente(Usuario cliente);
-
 
     List<Pasaje> findByDatosViajeAndEstadoIn(Viaje datosViaje, List<EstadoPasaje> estados);
 
     List<Pasaje> findByDatosViajeId(Integer viajeId);
 
-    Optional<Pasaje> findByDatosViajeAndNumeroAsiento(Viaje viaje, Integer numeroAsiento);
-
     List<Pasaje> findByClienteId(Long clienteId);
 
     List<Pasaje> findByEstadoAndFechaReservaBefore(EstadoPasaje estado, LocalDateTime fecha);
+
+
+    // --- MÉTODO ANTIGUO ELIMINADO ---
+    // Optional<Pasaje> findByDatosViajeAndNumeroAsiento(Viaje viaje, Integer numeroAsiento);
+    // Este método fue eliminado porque causaba NonUniqueResultException al no diferenciar por estado.
+
+
+    // --- NUEVOS MÉTODOS AÑADIDOS PARA REEMPLAZARLO ---
+
+    /**
+     * Busca un pasaje ACTIVO (Vendido o Reservado) para un viaje y asiento específicos.
+     * Ignora los pasajes CANCELADOS, evitando la NonUniqueResultException.
+     * Se usa para verificar si un asiento está realmente ocupado antes de una nueva reserva.
+     *
+     * @param viaje El viaje en el que se busca.
+     * @param numeroAsiento El número de asiento a verificar.
+     * @param estados Una lista de estados a considerar como "ocupado" (ej. [VENDIDO, RESERVADO]).
+     * @return Un Optional que contiene el pasaje si se encuentra uno activo, o vacío si está libre.
+     */
+    Optional<Pasaje> findByDatosViajeAndNumeroAsientoAndEstadoIn(Viaje viaje, Integer numeroAsiento, List<EstadoPasaje> estados);
+
+    /**
+     * Busca un pasaje con un ESTADO ESPECÍFICO para un viaje y asiento.
+     * Se usa para encontrar una reserva existente (estado RESERVADO) y confirmarla,
+     * ignorando cualquier pasaje CANCELADO para el mismo asiento.
+     *
+     * @param viaje El viaje en el que se busca.
+     * @param numeroAsiento El número de asiento.
+     * @param estado El estado exacto que debe tener el pasaje (ej. RESERVADO).
+     * @return Un Optional que contiene el pasaje si se encuentra, o vacío si no.
+     */
+    Optional<Pasaje> findByDatosViajeAndNumeroAsientoAndEstado(Viaje viaje, Integer numeroAsiento, EstadoPasaje estado);
+
 }

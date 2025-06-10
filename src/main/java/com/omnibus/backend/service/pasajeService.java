@@ -56,73 +56,39 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
 
     @Transactional
     public PasajeResponseDTO comprarPasaje(CompraPasajeRequestDTO requestDTO) {
-        logger.info("Intentando comprar pasaje para viaje ID {} por cliente ID {} en asiento {}",
-                requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumeroAsiento());
+        logger.info("Intentando comprar pasaje para viaje ID {} por Procediendo a crear pasaje...", requestDTO.getNumeroAsiento());
 
-        Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
-                .orElseThrow(() -> {
-                    logger.warn("Viaje no encontrado con ID: {}", requestDTO.getViajeId());
-                    return new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId());
-                });
-
-        Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
-                .orElseThrow(() -> {
-                    logger.warn("Cliente no encontrado con ID: {}", requestDTO.getClienteId());
-                    return new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId());
-                });
-
-        // ... (el resto de la lógica de validación se mantiene igual)
-        if (viaje.getEstado() != EstadoViaje.PROGRAMADO) {
-            String mensajeError = "Solo se pueden comprar pasajes para viajes en estado PROGRAMADO. Estado actual: " + viaje.getEstado();
-            logger.warn(mensajeError + " para viaje ID {}", viaje.getId());
-            throw new IllegalStateException(mensajeError);
-        }
-        if (viaje.getAsientosDisponibles() <= 0) {
-            String mensajeError = "No hay asientos disponibles (conteo general) para el viaje ID: " + viaje.getId();
-            logger.warn(mensajeError);
-            throw new IllegalStateException(mensajeError);
-        }
-        Omnibus busAsignado = viaje.getBusAsignado();
-        if (busAsignado == null) {
-            String mensajeError = "El viaje ID " + viaje.getId() + " no tiene un ómnibus asignado.";
-            logger.error(mensajeError);
-            throw new IllegalStateException(mensajeError);
-        }
-        if (requestDTO.getNumeroAsiento() > busAsignado.getCapacidadAsientos() || requestDTO.getNumeroAsiento() < 1) {
-            String mensajeError = "Número de asiento " + requestDTO.getNumeroAsiento() +
-                    " inválido para un ómnibus con capacidad " + busAsignado.getCapacidadAsientos() + " asientos.";
-            logger.warn(mensajeError + " para viaje ID {}", viaje.getId());
-            throw new IllegalArgumentException(mensajeError);
-        }
-        pasajeRepository.findByDatosViajeAndNumeroAsiento(viaje, requestDTO.getNumeroAsiento())
-                .ifPresent(pasajeExistente -> {
-                    if (pasajeExistente.getEstado() != EstadoPasaje.CANCELADO) {
-                        String mensajeError = "El asiento " + requestDTO.getNumeroAsiento() +
-                                " ya está ocupado (estado: " + pasajeExistente.getEstado() +
-                                ") para el viaje ID: " + viaje.getId();
-                        logger.warn(mensajeError);
-                        throw new IllegalStateException(mensajeError);
-                    }
-                });
-
-        logger.info("Simulando proceso de pago para viaje ID {} asiento {}...", viaje.getId(), requestDTO.getNumeroAsiento());
-
+        // --- CREACIÓN DEL NUEVO PASAJE (SIN CAMBIOS) ---
         Pasaje nuevoPasaje = new Pasaje();
         nuevoPasaje.setCliente(cliente);
         nuevoPasaje.setDatosViaje(viaje);
         nuevoPasaje.setNumeroAsiento(requestDTO.getNumeroAsiento());
-        nuevoPasaje.setPrecio(viaje.getPrecio());
-        nuevoPasaje.setEstado(EstadoPasaje.VENDIDO);
+        nuevoPasaje.setPrecio(viaje.getPrecio cliente ID {} en asiento {}",
+        requestDTO.getViajeId(), requestDTO.getClienteId(), requestDTO.getNumeroAsiento());
 
-        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - 1);
-        viajeRepository.save(viaje);
+        Viaje viaje = viajeRepository.findById(requestDTO.getViajeId())
+                .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + requestDTO.getViajeId()));
 
-        Pasaje pasajeGuardado = pasajeRepository.save(nuevoPasaje);
-        logger.info("Pasaje ID {} creado exitosamente para viaje ID {} asiento {}, estado: VENDIDO",
-                pasajeGuardado.getId(), viaje.getId(), pasajeGuardado.getNumeroAsiento());
+        Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
 
-        return convertirAPasajeResponseDTO(pasajeGuardado);
-    }
+        // --- BLOQUE DE VALIDACIÓN CORREGIDO ---
+        // 1. Validaciones generales del viaje y del asiento
+        if (viaje.getEstado() != EstadoViaje.PROGRAMADO) {
+            throw new IllegalStateException("Solo se pueden comprar pasajes para viajes()); // Ojo: Este método no usa el PrecioService con descuentos.
+                    nuevoPasaje.setEstado(EstadoPasaje.VENDIDO);
+            // Nota: Aquí también deberías guardar el paypalTransactionId si este método se usa con PayPal.
+            // nuevoPasaje.setPaypalTransactionId(requestDTO.getPaypalTransactionId());
+
+            viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() - 1);
+            viajeRepository.save(viaje);
+
+            Pasaje pasajeGuardado = pasajeRepository.save(nuevoPasaje);
+            logger.info("Pasaje ID {} creado exitosamente para viaje ID {} asiento {}, estado: VENDIDO",
+                    pasajeGuardado.getId(), viaje.getId(), pasajeGuardado.getNumeroAsiento());
+
+            return convertirAPasajeResponseDTO(pasajeGuardado);
+        }
 
     // ... (los otros métodos como obtenerAsientosOcupados, obtenerHistorialPasajesPorClienteId, etc. se mantienen igual)
     @Transactional(readOnly = true)

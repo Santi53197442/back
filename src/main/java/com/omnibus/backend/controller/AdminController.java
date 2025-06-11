@@ -1,6 +1,7 @@
 package com.omnibus.backend.controller;
 
 import com.omnibus.backend.dto.CreatePrivilegedUserDTO;
+import com.omnibus.backend.dto.PaginatedUserResponseDTO;
 import com.omnibus.backend.dto.UserViewDTO;
 // --- IMPORTACIONES PARA ESTADÍSTICAS ---
 
@@ -11,13 +12,17 @@ import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.model.Vendedor;
 import com.omnibus.backend.repository.UsuarioRepository;
 // --- IMPORTACIONES PARA ESTADÍSTICAS ---
+import com.omnibus.backend.repository.specification.UsuarioSpecification;
 import com.omnibus.backend.service.UserService;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.data.domain.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +37,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
 import jakarta.validation.Validator;
 
+import org.springframework.data.domain.Pageable;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -241,20 +247,33 @@ public class AdminController {
         return errors;
     }
 
+
+
     @GetMapping("/users")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
-    public ResponseEntity<List<UserViewDTO>> getAllUsers() {
-        List<Usuario> usuarios = usuarioRepository.findAll();
-        List<UserViewDTO> userViewDTOs = usuarios.stream().map(usuario -> {
-            String rol = "DESCONOCIDO";
-            if (usuario instanceof Administrador) {
-                rol = "ADMINISTRADOR";
-            } else if (usuario instanceof Vendedor) {
-                rol = "VENDEDOR";
-            } else if (usuario instanceof Cliente) {
-                rol = "CLIENTE";
-            }
+    public ResponseEntity<PaginatedUserResponseDTO> getAllUsers(
+            @PageableDefault(page = 0, size = 20, sort = "id") Pageable pageable,
+            // 1. Añadimos los parámetros de filtro. Son opcionales.
+            @RequestParam(required = false) String nombre,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String rol) {
 
+        // 2. Construimos la especificación a partir de los filtros recibidos
+        Specification<Usuario> spec = UsuarioSpecification.withFilters(nombre, email, rol);
+
+        // 3. Usamos el método findAll que acepta una Specification y un Pageable
+        Page<Usuario> paginaUsuarios = usuarioRepository.findAll(spec, pageable);
+
+        // El resto del método para mapear a DTO y construir la respuesta no cambia
+        Page<UserViewDTO> paginaUserViewDTOs = paginaUsuarios.map(usuario -> {
+            String rolDeterminado = "DESCONOCIDO";
+            if (usuario instanceof Administrador) {
+                rolDeterminado = "ADMINISTRADOR";
+            } else if (usuario instanceof Vendedor) {
+                rolDeterminado = "VENDEDOR";
+            } else if (usuario instanceof Cliente) {
+                rolDeterminado = "CLIENTE";
+            }
             return new UserViewDTO(
                     usuario.getId(),
                     usuario.getNombre(),
@@ -263,11 +282,18 @@ public class AdminController {
                     usuario.getCi(),
                     usuario.getTelefono(),
                     usuario.getFechaNac(),
-                    rol
+                    rolDeterminado
             );
-        }).collect(Collectors.toList());
+        });
 
-        return ResponseEntity.ok(userViewDTOs);
+        PaginatedUserResponseDTO response = new PaginatedUserResponseDTO(
+                paginaUserViewDTOs.getContent(),
+                paginaUserViewDTOs.getNumber(),
+                paginaUserViewDTOs.getTotalElements(),
+                paginaUserViewDTOs.getTotalPages()
+        );
+
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/users/{id}")

@@ -70,6 +70,6 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> {
      * @param estado El estado del pasaje a contar (ej. RESERVADO).
      * @return El número de pasajes que cumplen los criterios.
      */
-    long countByViajeAndClienteAndEstado(Viaje viaje, Usuario cliente, EstadoPasaje estado);
+    long countByDatosViajeAndClienteAndEstado(Viaje viaje, Usuario cliente, EstadoPasaje estado);
 
 }

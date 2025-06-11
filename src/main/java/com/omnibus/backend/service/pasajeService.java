@@ -366,7 +366,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
 
         // Contar cuántos asientos ya tiene este cliente en estado RESERVADO para este viaje.
         // (Asegúrate de que 'countByViajeAndClienteAndEstado' existe en tu PasajeRepository)
-        long asientosYaReservados = pasajeRepository.countByViajeAndClienteAndEstado(viaje, cliente, EstadoPasaje.RESERVADO);
+        long asientosYaReservados = pasajeRepository.countByDatosViajeAndClienteAndEstado(viaje, cliente, EstadoPasaje.RESERVADO);
 
         // Verificar si la suma de los asientos ya reservados temporalmente y los nuevos supera el límite.
         if (asientosYaReservados + nuevosAsientosCount > MAX_ASIENTOS_TEMPORALES) {

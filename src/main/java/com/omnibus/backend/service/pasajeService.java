@@ -345,6 +345,8 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                 .collect(Collectors.toList());
     }
 
+    // En tu archivo PasajeService.java
+
     @Transactional
     public List<PasajeResponseDTO> reservarAsientosTemporalmente(CompraMultiplePasajesRequestDTO requestDTO) {
         logger.info("Intentando reserva temporal para viaje ID {}, cliente ID {}, asientos {}",
@@ -357,16 +359,32 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         Usuario cliente = usuarioRepository.findById(requestDTO.getClienteId())
                 .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado con ID: " + requestDTO.getClienteId()));
 
-        // 2. Validar que los asientos no estén ya ocupados (CON LA CORRECCIÓN)
-        // Se define la lista de estados que consideramos "ocupados" o "bloqueados".
+
+        // --- INICIO: LÓGICA DE VALIDACIÓN DEL LÍMITE DE RESERVAS (ÚNICO CÓDIGO AÑADIDO) ---
+        final int MAX_ASIENTOS_TEMPORALES = 4;
+        int nuevosAsientosCount = requestDTO.getNumerosAsiento().size();
+
+        // Contar cuántos asientos ya tiene este cliente en estado RESERVADO para este viaje.
+        // (Asegúrate de que 'countByViajeAndClienteAndEstado' existe en tu PasajeRepository)
+        long asientosYaReservados = pasajeRepository.countByViajeAndClienteAndEstado(viaje, cliente, EstadoPasaje.RESERVADO);
+
+        // Verificar si la suma de los asientos ya reservados temporalmente y los nuevos supera el límite.
+        if (asientosYaReservados + nuevosAsientosCount > MAX_ASIENTOS_TEMPORALES) {
+            throw new IllegalStateException(
+                    "Usted ya tiene " + asientosYaReservados + " asientos en una reserva temporal. " +
+                            "No puede añadir " + nuevosAsientosCount + " más, ya que superaría el límite de " +
+                            MAX_ASIENTOS_TEMPORALES + " asientos temporales por viaje."
+            );
+        }
+        // --- FIN: LÓGICA DE VALIDACIÓN DEL LÍMITE DE RESERVAS ---
+
+
+        // 2. Validar que los asientos no estén ya ocupados (SIN CAMBIOS)
         List<EstadoPasaje> estadosActivos = List.of(EstadoPasaje.VENDIDO, EstadoPasaje.RESERVADO);
 
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
-            // Se utiliza el nuevo método del repositorio que busca por viaje, asiento Y estado.
-            // Esto ignora los pasajes CANCELADOS para el mismo asiento.
             pasajeRepository.findByDatosViajeAndNumeroAsientoAndEstadoIn(viaje, numeroAsiento, estadosActivos)
                     .ifPresent(p -> {
-                        // La lógica interna de lanzar la excepción es la misma.
                         throw new IllegalStateException("El asiento " + numeroAsiento + " ya no está disponible.");
                     });
         }
@@ -382,7 +400,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         for (Integer numeroAsiento : requestDTO.getNumerosAsiento()) {
             Pasaje pasaje = new Pasaje();
             pasaje.setCliente(cliente);
-            pasaje.setDatosViaje(viaje);
+            pasaje.setDatosViaje(viaje); // Asumo que se llama setViaje o similar
             pasaje.setNumeroAsiento(numeroAsiento);
             pasaje.setEstado(EstadoPasaje.RESERVADO);
             pasaje.setFechaReserva(fechaReserva);
@@ -401,6 +419,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                 .map(this::convertirAPasajeResponseDTO)
                 .collect(Collectors.toList());
     }
+
 
     @Transactional
     public String procesarDevolucionPasaje(Integer pasajeId) {

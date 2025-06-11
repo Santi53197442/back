@@ -3,6 +3,7 @@ package com.omnibus.backend.repository;
 
 import com.omnibus.backend.model.EstadoPasaje;
 import com.omnibus.backend.model.Pasaje;
+import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.model.Viaje;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -59,5 +60,16 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> {
      * @return Un Optional que contiene el pasaje si se encuentra, o vacío si no.
      */
     Optional<Pasaje> findByDatosViajeAndNumeroAsientoAndEstado(Viaje viaje, Integer numeroAsiento, EstadoPasaje estado);
+
+    // --- MÉTODO NUEVO QUE DEBES AÑADIR ---
+    /**
+     * Cuenta la cantidad de pasajes para un viaje y cliente específicos que están en un estado determinado.
+     * Es ideal para verificar el límite de reservas temporales.
+     * @param viaje El objeto Viaje.
+     * @param cliente El objeto Usuario (cliente).
+     * @param estado El estado del pasaje a contar (ej. RESERVADO).
+     * @return El número de pasajes que cumplen los criterios.
+     */
+    long countByViajeAndClienteAndEstado(Viaje viaje, Usuario cliente, EstadoPasaje estado);
 
 }

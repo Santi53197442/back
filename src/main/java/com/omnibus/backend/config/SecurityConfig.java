@@ -69,19 +69,25 @@ public class SecurityConfig {
                         // --- PÚBLICO Y OPCIONES ---
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight CORS
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/actuator/**").permitAll() // Considera seguridad en producción
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/auth/forgot-password").permitAll()
                         .requestMatchers("/api/auth/reset-password").permitAll()
 
                         .requestMatchers("/api/paypal/**").permitAll() //PARA PAYPAL
 
+                        // ================== CAMBIO AQUÍ ==================
+                        // AÑADE ESTA LÍNEA PARA HACER EL ENDPOINT PÚBLICO
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles").permitAll()
+                        // ===============================================
+
                         // --- ENDPOINTS ACCESIBLES POR CLIENTES, VENDEDORES Y ADMINS (DENTRO DE /api/vendedor) ---
-                        // Estas reglas específicas deben ir ANTES de la regla general para /api/vendedor/**
-                        .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles")
-                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+                        // ELIMINA la regla de aquí, ya que la movimos arriba para que sea pública.
+                        // .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles")
+                        // .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
+
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/buscar-disponibles")
                         .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/detalles-asientos") // El * es un comodín para el ID del viaje
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/detalles-asientos")
                         .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/asientos-ocupados")
                         .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
@@ -96,16 +102,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMINISTRADOR")
 
                         // --- ENDPOINTS DE VENDEDOR (LO RESTANTE BAJO /api/vendedor) ---
-                        // Esta regla se aplica a cualquier otra ruta bajo /api/vendedor que no haya coincidido antes
                         .requestMatchers("/api/vendedor/**").hasAnyRole("VENDEDOR", "ADMINISTRADOR")
 
                         // --- ENDPOINTS DE USUARIO AUTENTICADO (GENÉRICOS) ---
                         .requestMatchers(HttpMethod.GET, "/api/user/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/user/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/user/password").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/user/ci/*").authenticated() // Para buscarClientePorCI
+                        .requestMatchers(HttpMethod.GET, "/api/user/ci/*").authenticated()
 
-                        // Todas las demás solicitudes no especificadas arriba deben estar autenticadas
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));

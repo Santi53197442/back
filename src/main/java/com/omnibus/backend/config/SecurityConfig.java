@@ -72,21 +72,12 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/auth/forgot-password").permitAll()
                         .requestMatchers("/api/auth/reset-password").permitAll()
-
                         .requestMatchers("/api/paypal/**").permitAll() //PARA PAYPAL
-
-                        // ================== CAMBIO AQUÍ ==================
-                        // AÑADE ESTA LÍNEA PARA HACER EL ENDPOINT PÚBLICO
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles").permitAll()
-                        // ===============================================
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/buscar-disponibles").permitAll()
 
                         // --- ENDPOINTS ACCESIBLES POR CLIENTES, VENDEDORES Y ADMINS (DENTRO DE /api/vendedor) ---
-                        // ELIMINA la regla de aquí, ya que la movimos arriba para que sea pública.
-                        // .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles")
-                        // .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
 
-                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/buscar-disponibles")
-                        .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/detalles-asientos")
                         .hasAnyRole("CLIENTE", "VENDEDOR", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/asientos-ocupados")

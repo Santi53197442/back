@@ -503,7 +503,7 @@ public class VendedorController {
 
 
     @GetMapping("/viajes/buscar-disponibles")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
+    //@PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<?> buscarViajesConDisponibilidad(
             @Valid @ModelAttribute BusquedaViajesGeneralDTO criteriosBusqueda) {
         try {

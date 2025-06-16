@@ -3,41 +3,54 @@ package com.omnibus.backend.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive; // Para el precio
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
-import lombok.Builder; // Si quieres usar el patrón Builder
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime; // IMPORTANTE: Nuevo import
 import java.time.LocalTime;
-import java.util.Objects; // Para equals y hashCode
+import java.util.Objects;
 
 @Entity
-@Table(name = "viaje") // Si tu tabla se llama 'viaje', si no, ajusta a 'viajes'
+@Table(name = "viaje")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder // Opcional, pero útil para crear instancias
+@Builder
 public class Viaje {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @NotNull(message = "La fecha del viaje no puede ser nula.")
-    @Column(nullable = false)
-    private LocalDate fecha;
+    // --- CAMPOS DE TIEMPO REFACTORIZADOS ---
+    @NotNull(message = "La fecha y hora de salida no puede ser nula.")
+    @Column(nullable = false, name = "fecha_hora_salida")
+    private LocalDateTime fechaHoraSalida;
 
-    @NotNull(message = "La hora de salida no puede ser nula.")
-    @Column(nullable = false)
-    private LocalTime horaSalida;
+    @NotNull(message = "La fecha y hora de llegada no puede ser nula.")
+    @Column(nullable = false, name = "fecha_hora_llegada")
+    private LocalDateTime fechaHoraLlegada;
 
-    @NotNull(message = "La hora de llegada no puede ser nula.")
-    @Column(nullable = false)
-    private LocalTime horaLlegada;
+    /*
+     --- CAMPOS ANTIGUOS - AHORA COMENTADOS O ELIMINADOS ---
+     @NotNull(message = "La fecha del viaje no puede ser nula.")
+     @Column(nullable = false)
+     private LocalDate fecha;
+
+     @NotNull(message = "La hora de salida no puede ser nula.")
+     @Column(nullable = false)
+     private LocalTime horaSalida;
+
+     @NotNull(message = "La hora de llegada no puede ser nula.")
+     @Column(nullable = false)
+     private LocalTime horaLlegada;
+    */
 
     @NotNull(message = "La localidad de origen no puede ser nula.")
     @ManyToOne(fetch = FetchType.LAZY)
@@ -55,44 +68,56 @@ public class Viaje {
     private Omnibus busAsignado;
 
     @NotNull(message = "Los asientos disponibles no pueden ser nulos.")
-    @Min(value = 0, message = "Los asientos disponibles no pueden ser negativos.") // Buena validación
+    @Min(value = 0, message = "Los asientos disponibles no pueden ser negativos.")
     @Column(nullable = false)
     private Integer asientosDisponibles;
 
     @NotNull(message = "El estado del viaje no puede ser nulo.")
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50) // Especificar longitud para el String del Enum
+    @Column(nullable = false, length = 50)
     private EstadoViaje estado;
 
-    // --- NUEVO CAMPO PRECIO ---
     @NotNull(message = "El precio del viaje no puede ser nulo.")
     @Positive(message = "El precio del viaje debe ser un valor positivo.")
-    @Column(name = "precio", nullable = false) // Nombre de columna y no nulo
+    @Column(name = "precio", nullable = false)
     private Double precio;
 
-    // Lombok genera getters y setters, constructores.
-    // Es buena práctica sobreescribir equals y hashCode si la entidad se usa en colecciones (Set, Map)
-    // o si se compara por identidad de negocio.
+    // --- MÉTODOS ÚTILES PARA COMPATIBILIDAD (OPCIONAL) ---
+    // @Transient te asegura que JPA no intentará mapearlos a la base de datos.
+    @Transient
+    public LocalDate getFecha() {
+        return this.fechaHoraSalida != null ? this.fechaHoraSalida.toLocalDate() : null;
+    }
+
+    @Transient
+    public LocalTime getHoraSalida() {
+        return this.fechaHoraSalida != null ? this.fechaHoraSalida.toLocalTime() : null;
+    }
+
+    @Transient
+    public LocalTime getHoraLlegada() {
+        return this.fechaHoraLlegada != null ? this.fechaHoraLlegada.toLocalTime() : null;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Viaje viaje = (Viaje) o;
-        return Objects.equals(id, viaje.id); // Compara solo por ID para entidades JPA
+        return Objects.equals(id, viaje.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id); // Usa solo el ID para el hashCode
+        return Objects.hash(id);
     }
 
     @Override
     public String toString() {
         return "Viaje{" +
                 "id=" + id +
-                ", fecha=" + fecha +
-                ", horaSalida=" + horaSalida +
-                ", horaLlegada=" + horaLlegada +
+                ", fechaHoraSalida=" + fechaHoraSalida +
+                ", fechaHoraLlegada=" + fechaHoraLlegada +
                 ", origen=" + (origen != null ? origen.getId() : "null") +
                 ", destino=" + (destino != null ? destino.getId() : "null") +
                 ", busAsignado=" + (busAsignado != null ? busAsignado.getId() : "null") +

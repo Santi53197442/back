@@ -95,4 +95,16 @@ public interface ViajeRepository extends JpaRepository<Viaje, Integer>, JpaSpeci
             @Param("fechaDesde") LocalDate fechaDesde,
             @Param("fechaHasta") LocalDate fechaHasta
     );
+
+    /**
+     * Busca viajes que están PROGRAMADOS y cuya hora de salida ya ha pasado.
+     */
+    @Query("SELECT v FROM Viaje v WHERE v.estado = com.omnibus.backend.model.EstadoViaje.PROGRAMADO AND (v.fecha < :fechaActual OR (v.fecha = :fechaActual AND v.horaSalida <= :horaActual))")
+    List<Viaje> findScheduledTripsToStart(@Param("fechaActual") LocalDate fechaActual, @Param("horaActual") LocalTime horaActual);
+
+    /**
+     * Busca viajes que están EN_CURSO y cuya hora de llegada ya ha pasado.
+     */
+    @Query("SELECT v FROM Viaje v WHERE v.estado = com.omnibus.backend.model.EstadoViaje.EN_CURSO AND (v.fecha < :fechaActual OR (v.fecha = :fechaActual AND v.horaLlegada <= :horaActual))")
+    List<Viaje> findOngoingTripsToFinish(@Param("fechaActual") LocalDate fechaActual, @Param("horaActual") LocalTime horaActual);
 }

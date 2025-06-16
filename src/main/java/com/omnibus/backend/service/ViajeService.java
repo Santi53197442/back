@@ -48,7 +48,11 @@ public class ViajeService {
 
     @Transactional
     public ViajeResponseDTO crearViaje(ViajeRequestDTO requestDTO) {
-        logger.info("Iniciando proceso de creación de viaje: {}", requestDTO);
+        logger.info("Iniciando proceso de creación de viaje con DTO: {}", requestDTO);
+
+        Objects.requireNonNull(requestDTO.getFecha(), "La fecha no puede ser nula en el DTO");
+        Objects.requireNonNull(requestDTO.getHoraSalida(), "La hora de salida no puede ser nula en el DTO");
+        Objects.requireNonNull(requestDTO.getHoraLlegada(), "La hora de llegada no puede ser nula en el DTO");
 
         LocalDateTime salidaNuevoViajeDT = LocalDateTime.of(requestDTO.getFecha(), requestDTO.getHoraSalida());
         LocalDateTime llegadaNuevoViajeDT = LocalDateTime.of(requestDTO.getFecha(), requestDTO.getHoraLlegada());
@@ -84,7 +88,7 @@ public class ViajeService {
                     Arrays.asList(EstadoViaje.PROGRAMADO, EstadoViaje.EN_CURSO)
             );
             if (!viajesConflictivosDirectos.isEmpty()) {
-                logger.debug("Bus {} tiene conflicto horario directo para el nuevo viaje con viaje ID {}.", busCandidato.getMatricula(), viajesConflictivosDirectos.get(0).getId());
+                logger.debug("Bus {} tiene conflicto horario directo con viaje ID {}.", busCandidato.getMatricula(), viajesConflictivosDirectos.get(0).getId());
                 continue;
             }
 
@@ -113,7 +117,7 @@ public class ViajeService {
 
             if (horaLlegadaUltimoViajeDT != null) {
                 if (horaLlegadaUltimoViajeDT.plus(MIN_BUFFER_OPERATIVO_POST_LLEGADA).isAfter(salidaNuevoViajeDT)) {
-                    logger.debug("Bus {} no tiene suficiente tiempo de preparación en origen. Llega a las {} (+{} min buffer) vs salida nuevo viaje {}",
+                    logger.debug("Bus {} no tiene suficiente tiempo de preparación. Llega a las {} (+{} min) vs salida nuevo viaje {}",
                             busCandidato.getMatricula(), horaLlegadaUltimoViajeDT, MIN_BUFFER_OPERATIVO_POST_LLEGADA.toMinutes(), salidaNuevoViajeDT);
                     continue;
                 }
@@ -138,8 +142,8 @@ public class ViajeService {
                 }
 
                 if (llegadaNuevoViajeDT.plus(bufferNecesario).isAfter(salidaProximoViajeAsignadoDT)) {
-                    logger.debug("Bus {} no tiene suficiente buffer ({} min) antes del próximo viaje ID {}. Llegada nuevo: {}, Salida próximo: {}",
-                            busCandidato.getMatricula(), bufferNecesario.toMinutes(), proximoViajeAsignado.getId(), llegadaNuevoViajeDT, salidaProximoViajeAsignadoDT);
+                    logger.debug("Bus {} no tiene suficiente buffer ({} min) antes del próximo viaje. Llegada nuevo: {}, Salida próximo: {}",
+                            busCandidato.getMatricula(), bufferNecesario.toMinutes(), llegadaNuevoViajeDT, salidaProximoViajeAsignadoDT);
                     continue;
                 }
             }
@@ -159,6 +163,7 @@ public class ViajeService {
                 .destino(destinoNuevoViaje)
                 .busAsignado(busSeleccionado)
                 .asientosDisponibles(busSeleccionado.getCapacidadAsientos())
+                .pasajesVendidos(0)
                 .estado(EstadoViaje.PROGRAMADO)
                 .precio(requestDTO.getPrecio())
                 .build();
@@ -251,8 +256,6 @@ public class ViajeService {
             throw new NoBusDisponibleException("El nuevo ómnibus (ID: " + nuevoOmnibusId + ") tiene conflicto horario directo con otro viaje (ID: " + viajesConflictivosNuevoBus.get(0).getId() + ").");
         }
 
-        // Aquí se podría añadir la lógica de buffers para la reasignación si es necesario.
-
         if (omnibusAnterior != null) {
             omnibusAnterior.setEstado(EstadoBus.OPERATIVO);
             omnibusRepository.save(omnibusAnterior);
@@ -308,30 +311,21 @@ public class ViajeService {
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
 
-        Sort sort = Sort.unsorted();
-        String defaultSortField1 = "fechaHoraSalida"; // Campo de ordenamiento por defecto actualizado
+        String defaultSortField = "fechaHoraSalida";
+        Sort sort = Sort.by(Sort.Direction.ASC, defaultSortField);
 
         if (dto.getOrdenarPor() != null && !dto.getOrdenarPor().trim().isEmpty()) {
             String campoOrden = dto.getOrdenarPor().trim();
-            // Adaptar los nombres de los campos de ordenamiento
             if (Arrays.asList("fechaHoraSalida", "fechaHoraLlegada", "estado", "id", "precio").contains(campoOrden)) {
                 Sort.Direction direction = (dto.getDireccionOrden() != null && "DESC".equalsIgnoreCase(dto.getDireccionOrden().trim()))
                         ? Sort.Direction.DESC : Sort.Direction.ASC;
                 sort = Sort.by(direction, campoOrden);
             } else {
-                logger.warn("Campo de ordenamiento no válido: {}. Usando orden por defecto (fechaHoraSalida ASC).", campoOrden);
-                sort = Sort.by(Sort.Direction.ASC, defaultSortField1);
+                logger.warn("Campo de ordenamiento no válido: {}. Usando orden por defecto.", campoOrden);
             }
-        } else {
-            sort = Sort.by(Sort.Direction.ASC, defaultSortField1);
         }
 
         List<Viaje> viajesEncontrados = viajeRepository.findAll(spec, sort);
-        if (viajesEncontrados.isEmpty()) {
-            logger.info("No se encontraron viajes para el ómnibus ID {} con los criterios.", omnibusId);
-            return new ArrayList<>();
-        }
-        logger.info("Se encontraron {} viajes para el ómnibus ID {} con los criterios.", viajesEncontrados.size(), omnibusId);
         return viajesEncontrados.stream()
                 .map(this::mapToViajeResponseDTO)
                 .collect(Collectors.toList());
@@ -374,10 +368,8 @@ public class ViajeService {
         List<ViajeConDisponibilidadDTO> dtos = viajesFiltrados.stream().map(viaje -> {
             Omnibus omnibus = viaje.getBusAsignado();
             if (omnibus == null) {
-                logger.warn("Viaje ID {} sin ómnibus asignado (inesperado después del filtro), se omitirá.", viaje.getId());
                 return null;
             }
-            int capacidadTotal = omnibus.getCapacidadAsientos();
             List<EstadoPasaje> estadosOcupados = Arrays.asList(EstadoPasaje.VENDIDO, EstadoPasaje.RESERVADO);
             long asientosVendidosCount = pasajeRepository.countByDatosViajeAndEstadoIn(viaje, estadosOcupados);
 
@@ -388,7 +380,7 @@ public class ViajeService {
                     viaje.getOrigen().getNombre(),
                     viaje.getDestino().getNombre(),
                     omnibus.getMatricula(),
-                    capacidadTotal,
+                    omnibus.getCapacidadAsientos(),
                     (int) asientosVendidosCount,
                     viaje.getEstado(),
                     viaje.getPrecio()
@@ -401,47 +393,38 @@ public class ViajeService {
                     .collect(Collectors.toList());
         }
 
-        if (criterios.getSortBy() != null && !criterios.getSortBy().isEmpty()) {
-            Comparator<ViajeConDisponibilidadDTO> comparator;
-            boolean ascending = criterios.getSortDir() == null || "asc".equalsIgnoreCase(criterios.getSortDir());
-            // Adaptado para usar el nuevo campo de fecha
-            String sortByField = "fechasalida".equalsIgnoreCase(criterios.getSortBy()) ? "fechaHoraSalida" : criterios.getSortBy();
+        // Lógica de ordenamiento
+        Comparator<ViajeConDisponibilidadDTO> comparator;
+        boolean ascending = criterios.getSortDir() == null || "asc".equalsIgnoreCase(criterios.getSortDir());
 
-            switch (sortByField.toLowerCase()) {
-                case "fechahorasalida":
-                    comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getFechaSalida, Comparator.nullsLast(LocalDateTime::compareTo));
-                    break;
-                case "origennombre":
-                    comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getOrigenNombre, String.CASE_INSENSITIVE_ORDER);
-                    break;
-                case "destinonombre":
-                    comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getDestinoNombre, String.CASE_INSENSITIVE_ORDER);
-                    break;
-                case "asientosdisponibles":
-                    comparator = Comparator.comparingInt(ViajeConDisponibilidadDTO::getAsientosDisponibles);
-                    break;
-                case "precio":
-                    comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getPrecio, Comparator.nullsLast(Double::compareTo));
-                    break;
-                default:
-                    logger.warn("Criterio de ordenamiento no reconocido para ViajeConDisponibilidadDTO: '{}'.", criterios.getSortBy());
-                    comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getFechaSalida, Comparator.nullsLast(LocalDateTime::compareTo));
-            }
-
-            if (!ascending) {
-                comparator = comparator.reversed();
-            }
-            dtos.sort(comparator);
-        } else {
-            dtos.sort(Comparator.comparing(ViajeConDisponibilidadDTO::getFechaSalida, Comparator.nullsLast(LocalDateTime::compareTo)));
+        switch (criterios.getSortBy() != null ? criterios.getSortBy().toLowerCase() : "fechasalida") {
+            case "origennombre":
+                comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getOrigenNombre, String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "destinonombre":
+                comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getDestinoNombre, String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "asientosdisponibles":
+                comparator = Comparator.comparingInt(ViajeConDisponibilidadDTO::getAsientosDisponibles);
+                break;
+            case "precio":
+                comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getPrecio, Comparator.nullsLast(Double::compareTo));
+                break;
+            case "fechasalida":
+            default:
+                comparator = Comparator.comparing(ViajeConDisponibilidadDTO::getFechaSalida, Comparator.nullsLast(LocalDateTime::compareTo));
+                break;
         }
+
+        if (!ascending) {
+            comparator = comparator.reversed();
+        }
+        dtos.sort(comparator);
         return dtos;
     }
 
     @Transactional(readOnly = true)
     public ViajeDetalleConAsientosDTO obtenerDetallesViajeParaSeleccionAsientos(Integer viajeId) {
-        logger.debug("Obteniendo detalles y asientos para el viaje ID: {}", viajeId);
-
         Viaje viaje = viajeRepository.findById(viajeId)
                 .orElseThrow(() -> new EntityNotFoundException("Viaje no encontrado con ID: " + viajeId));
 
@@ -460,17 +443,16 @@ public class ViajeService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        logger.debug("Asientos ocupados para viaje {}: {}", viajeId, numerosAsientoOcupados);
-
         return ViajeDetalleConAsientosDTO.builder()
                 .id(viaje.getId())
-                .fecha(viaje.getFecha()) // Usa el getter transitorio
-                .horaSalida(viaje.getHoraSalida()) // Usa el getter transitorio
-                .horaLlegada(viaje.getHoraLlegada()) // Usa el getter transitorio
+                .fecha(viaje.getFecha())
+                .horaSalida(viaje.getHoraSalida())
+                .horaLlegada(viaje.getHoraLlegada())
                 .origenNombre(viaje.getOrigen().getNombre())
                 .destinoNombre(viaje.getDestino().getNombre())
                 .precio(viaje.getPrecio())
                 .estado(viaje.getEstado())
+
                 .omnibusMatricula(omnibus.getMatricula())
                 .capacidadOmnibus(omnibus.getCapacidadAsientos())
                 .asientosDisponibles(viaje.getAsientosDisponibles())
@@ -479,31 +461,21 @@ public class ViajeService {
     }
 
     private ViajeResponseDTO mapToViajeResponseDTO(Viaje viaje) {
-        ViajeResponseDTO.ViajeResponseDTOBuilder builder = ViajeResponseDTO.builder()
+        return ViajeResponseDTO.builder()
                 .id(viaje.getId())
-                .fecha(viaje.getFecha()) // Usa el getter transitorio
-                .horaSalida(viaje.getHoraSalida()) // Usa el getter transitorio
-                .horaLlegada(viaje.getHoraLlegada()) // Usa el getter transitorio
+                .fecha(viaje.getFecha())
+                .horaSalida(viaje.getHoraSalida())
+                .horaLlegada(viaje.getHoraLlegada())
                 .origenId(viaje.getOrigen().getId())
                 .origenNombre(viaje.getOrigen().getNombre())
                 .destinoId(viaje.getDestino().getId())
                 .destinoNombre(viaje.getDestino().getNombre())
-                .asientosDisponibles(viaje.getAsientosDisponibles());
-
-        if (viaje.getBusAsignado() != null) {
-            builder.busAsignadoId(viaje.getBusAsignado().getId());
-            builder.busMatricula(viaje.getBusAsignado().getMatricula());
-        } else {
-            builder.busMatricula("N/A");
-        }
-
-        if (viaje.getEstado() != null) {
-            builder.estado(viaje.getEstado().name());
-        }
-        if (viaje.getPrecio() != null) {
-            builder.precio(viaje.getPrecio());
-        }
-        return builder.build();
+                .asientosDisponibles(viaje.getAsientosDisponibles())
+                .busAsignadoId(viaje.getBusAsignado() != null ? viaje.getBusAsignado().getId() : null)
+                .busMatricula(viaje.getBusAsignado() != null ? viaje.getBusAsignado().getMatricula() : "N/A")
+                .estado(viaje.getEstado() != null ? viaje.getEstado().name() : null)
+                .precio(viaje.getPrecio())
+                .build();
     }
 
     public static class NoBusDisponibleException extends RuntimeException {
@@ -516,9 +488,9 @@ public class ViajeService {
         List<Viaje> viajes = viajeRepository.findAll();
         return viajes.stream().map(viaje -> new ViajePrecioDTO(
                 viaje.getId(),
-                viaje.getFecha(), // Usa el getter transitorio
-                viaje.getHoraSalida(), // Usa el getter transitorio
-                viaje.getHoraLlegada(), // Usa el getter transitorio
+                viaje.getFecha(),
+                viaje.getHoraSalida(),
+                viaje.getHoraLlegada(),
                 viaje.getOrigen().getNombre(),
                 viaje.getDestino().getNombre(),
                 viaje.getBusAsignado().getMatricula(),

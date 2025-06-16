@@ -5,12 +5,14 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+
+import java.time.LocalDateTime; // Importar LocalDateTime
 
 @Entity
-@Table(name = "omnibus") // Nombre de la tabla en la base de datos
+@Table(name = "omnibus")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,11 +20,11 @@ public class Omnibus {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id; // Usar Long para IDs es común
+    private Long id;
 
     @NotBlank(message = "La matrícula no puede estar vacía.")
-    @Size(min = 6, max = 10, message = "La matrícula debe tener entre 6 y 10 caracteres.") // Ajusta según el formato de tu país
-    @Column(unique = true, nullable = false) // Matrícula debe ser única
+    @Size(min = 6, max = 10, message = "La matrícula debe tener entre 6 y 10 caracteres.")
+    @Column(unique = true, nullable = false)
     private String matricula;
 
     @NotBlank(message = "La marca no puede estar vacía.")
@@ -33,21 +35,30 @@ public class Omnibus {
 
     @NotNull(message = "La capacidad de asientos no puede ser nula.")
     @Min(value = 1, message = "La capacidad de asientos debe ser al menos 1.")
-    private Integer capacidadAsientos; // Integer para permitir nulidad si es opcional en algún DTO (aunque aquí es NotNull)
+    private Integer capacidadAsientos;
 
     @NotNull(message = "El estado del bus no puede ser nulo.")
-    @Enumerated(EnumType.STRING) // Guarda el nombre del enum como String en la BD
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EstadoBus estado;
 
-    // Relación con Localidad
-    // Un ómnibus está en una localidad actual. Una localidad puede tener muchos ómnibus.
     @NotNull(message = "La localidad actual no puede ser nula.")
-    @ManyToOne(fetch = FetchType.LAZY) // Carga perezosa es generalmente buena para el rendimiento
-    @JoinColumn(name = "localidad_actual_id", nullable = false) // Nombre de la columna de la FK
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "localidad_actual_id", nullable = false)
     private Localidad localidadActual;
 
-    // Constructor sin ID para creación (opcional, Lombok puede generarlo)
+    // --- NUEVOS CAMPOS PARA INACTIVIDAD PROGRAMADA ---
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_programado", nullable = true)
+    private EstadoBus estadoProgramado;
+
+    @Column(name = "inicio_inactividad_programada", nullable = true)
+    private LocalDateTime inicioInactividadProgramada;
+
+    @Column(name = "fin_inactividad_programada", nullable = true)
+    private LocalDateTime finInactividadProgramada;
+    // --- FIN DE NUEVOS CAMPOS ---
+
     public Omnibus(String matricula, String marca, String modelo, Integer capacidadAsientos, EstadoBus estado, Localidad localidadActual) {
         this.matricula = matricula;
         this.marca = marca;

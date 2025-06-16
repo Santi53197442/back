@@ -67,9 +67,8 @@ public class OmnibusService {
 
     @Transactional
     public Omnibus marcarOmnibusInactivo(Long omnibusId, LocalDateTime inicioInactividad, LocalDateTime finInactividad, EstadoBus nuevoEstado) {
-        logger.info("Intentando marcar ómnibus {} como {} de {} a {}", omnibusId, nuevoEstado, inicioInactividad, finInactividad);
+        logger.info("Programando inactividad para ómnibus {} como {} de {} a {}", omnibusId, nuevoEstado, inicioInactividad, finInactividad);
 
-        // Validaciones iniciales
         if (nuevoEstado != EstadoBus.EN_MANTENIMIENTO && nuevoEstado != EstadoBus.FUERA_DE_SERVICIO) {
             throw new IllegalArgumentException("El nuevo estado para inactividad debe ser EN_MANTENIMIENTO o FUERA_DE_SERVICIO.");
         }
@@ -80,25 +79,18 @@ public class OmnibusService {
         Omnibus omnibus = omnibusRepository.findById(omnibusId)
                 .orElseThrow(() -> new EntityNotFoundException("Ómnibus no encontrado con ID: " + omnibusId));
 
-        if (omnibus.getEstado() == nuevoEstado) {
-            logger.warn("Ómnibus {} ya está en estado {}. No se realizan cambios.", omnibusId, nuevoEstado);
-            return omnibus;
-        }
         if (omnibus.getEstado() == EstadoBus.ASIGNADO_A_VIAJE) {
             throw new BusConViajesAsignadosException("El ómnibus está actualmente ASIGNADO_A_VIAJE y no puede marcarse inactivo directamente. Considere finalizar o reasignar sus viajes.");
         }
 
-        // --- LÓGICA DE VERIFICACIÓN CORREGIDA Y SIMPLIFICADA ---
         List<EstadoViaje> estadosConsiderados = Arrays.asList(EstadoViaje.PROGRAMADO, EstadoViaje.EN_CURSO);
 
-        // Usamos el nuevo método `findOverlappingTrips` que ya hace toda la lógica de solapamiento
         List<Viaje> viajesConflictivos = viajeRepository.findOverlappingTrips(
                 omnibus,
                 inicioInactividad,
                 finInactividad,
                 estadosConsiderados
         );
-        // --- FIN DE LA LÓGICA CORREGIDA ---
 
         if (!viajesConflictivos.isEmpty()) {
             logger.warn("Ómnibus {} tiene {} viajes conflictivos con el periodo de inactividad.", omnibusId, viajesConflictivos.size());
@@ -109,11 +101,14 @@ public class OmnibusService {
             );
         }
 
-        logger.info("No hay conflictos. Marcando ómnibus {} como {}.", omnibusId, nuevoEstado);
-        omnibus.setEstado(nuevoEstado);
-        // Opcional: Guardar el período de inactividad en la entidad Omnibus si tienes esos campos
-        // omnibus.setInicioInactividad(inicioInactividad.toLocalDate());
-        // omnibus.setFinInactividad(finInactividad.toLocalDate());
+        logger.info("No hay conflictos. Programando inactividad para ómnibus {}.", omnibusId);
+        // --- LÓGICA MODIFICADA: Se guardan los datos de la programación ---
+        omnibus.setEstadoProgramado(nuevoEstado);
+        omnibus.setInicioInactividadProgramada(inicioInactividad);
+        omnibus.setFinInactividadProgramada(finInactividad);
+
+        // El estado actual NO cambia.
+        logger.info("Inactividad programada correctamente para el ómnibus {}. El estado actual sigue siendo {}.", omnibusId, omnibus.getEstado());
         return omnibusRepository.save(omnibus);
     }
 
@@ -130,6 +125,10 @@ public class OmnibusService {
             throw new IllegalStateException("No se puede marcar como OPERATIVO un bus que está ASIGNADO_A_VIAJE. Debe finalizar o reasignar sus viajes primero.");
         }
         omnibus.setEstado(EstadoBus.OPERATIVO);
+        // Limpiamos también los campos de programación por si acaso.
+        omnibus.setEstadoProgramado(null);
+        omnibus.setInicioInactividadProgramada(null);
+        omnibus.setFinInactividadProgramada(null);
         logger.info("Ómnibus {} marcado como OPERATIVO.", omnibusId);
         return omnibusRepository.save(omnibus);
     }

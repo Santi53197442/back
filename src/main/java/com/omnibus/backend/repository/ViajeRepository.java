@@ -107,4 +107,8 @@ public interface ViajeRepository extends JpaRepository<Viaje, Integer>, JpaSpeci
      */
     @Query("SELECT v FROM Viaje v WHERE v.estado = com.omnibus.backend.model.EstadoViaje.EN_CURSO AND (v.fecha < :fechaActual OR (v.fecha = :fechaActual AND v.horaLlegada <= :horaActual))")
     List<Viaje> findOngoingTripsToFinish(@Param("fechaActual") LocalDate fechaActual, @Param("horaActual") LocalTime horaActual);
+
+    @Query("SELECT v FROM Viaje v WHERE v.estado = com.omnibus.backend.model.EstadoViaje.PROGRAMADO AND (v.fecha < :fechaActual OR (v.fecha = :fechaActual AND v.horaLlegada <= :horaActual))")
+    List<Viaje> findScheduledTripsToFinishDirectly(@Param("fechaActual") LocalDate fechaActual, @Param("horaActual") LocalTime horaActual);
+
 }

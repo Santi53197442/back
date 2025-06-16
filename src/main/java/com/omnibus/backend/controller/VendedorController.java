@@ -165,7 +165,7 @@ public class VendedorController {
         errorMessages.add(errorDetail);
     }
     @GetMapping("/localidades-disponibles")
-    @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
+   // @PreAuthorize("hasRole('VENDEDOR') or hasRole('CLIENTE')") // MODIFICADO
     public ResponseEntity<List<Localidad>> listarTodasLasLocalidadesParaSeleccion() {
         try {
             List<Localidad> localidades = localidadService.obtenerTodasLasLocalidades();

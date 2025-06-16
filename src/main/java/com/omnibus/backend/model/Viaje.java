@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime; // IMPORTANTE: Nuevo import
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Objects;
 
@@ -28,29 +28,13 @@ public class Viaje {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    // --- CAMPOS DE TIEMPO REFACTORIZADOS ---
     @NotNull(message = "La fecha y hora de salida no puede ser nula.")
-    @Column(nullable = false, name = "fecha_hora_salida")
+    @Column(name = "fecha_hora_salida", nullable = false)
     private LocalDateTime fechaHoraSalida;
 
     @NotNull(message = "La fecha y hora de llegada no puede ser nula.")
-    @Column(nullable = false, name = "fecha_hora_llegada")
+    @Column(name = "fecha_hora_llegada", nullable = false)
     private LocalDateTime fechaHoraLlegada;
-
-    /*
-     --- CAMPOS ANTIGUOS - AHORA COMENTADOS O ELIMINADOS ---
-     @NotNull(message = "La fecha del viaje no puede ser nula.")
-     @Column(nullable = false)
-     private LocalDate fecha;
-
-     @NotNull(message = "La hora de salida no puede ser nula.")
-     @Column(nullable = false)
-     private LocalTime horaSalida;
-
-     @NotNull(message = "La hora de llegada no puede ser nula.")
-     @Column(nullable = false)
-     private LocalTime horaLlegada;
-    */
 
     @NotNull(message = "La localidad de origen no puede ser nula.")
     @ManyToOne(fetch = FetchType.LAZY)
@@ -72,6 +56,9 @@ public class Viaje {
     @Column(nullable = false)
     private Integer asientosDisponibles;
 
+    @Column(name = "pasajes_vendidos")
+    private Integer pasajesVendidos;
+
     @NotNull(message = "El estado del viaje no puede ser nulo.")
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
@@ -82,8 +69,6 @@ public class Viaje {
     @Column(name = "precio", nullable = false)
     private Double precio;
 
-    // --- MÉTODOS ÚTILES PARA COMPATIBILIDAD (OPCIONAL) ---
-    // @Transient te asegura que JPA no intentará mapearlos a la base de datos.
     @Transient
     public LocalDate getFecha() {
         return this.fechaHoraSalida != null ? this.fechaHoraSalida.toLocalDate() : null;
@@ -122,6 +107,7 @@ public class Viaje {
                 ", destino=" + (destino != null ? destino.getId() : "null") +
                 ", busAsignado=" + (busAsignado != null ? busAsignado.getId() : "null") +
                 ", asientosDisponibles=" + asientosDisponibles +
+                ", pasajesVendidos=" + pasajesVendidos +
                 ", estado=" + estado +
                 ", precio=" + precio +
                 '}';

@@ -16,12 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId; // <-- ¡IMPORTANTE! AÑADIR ESTE IMPORT
 import java.util.List;
 
 @Service
 public class ViajeStatusScheduler {
 
     private static final Logger logger = LoggerFactory.getLogger(ViajeStatusScheduler.class);
+
+    // --- Definimos la Zona Horaria de Uruguay ---
+    private static final ZoneId ZONA_HORARIA_URUGUAY = ZoneId.of("America/Montevideo");
 
     private final ViajeRepository viajeRepository;
     private final OmnibusRepository omnibusRepository;
@@ -32,19 +36,16 @@ public class ViajeStatusScheduler {
         this.omnibusRepository = omnibusRepository;
     }
 
-    /**
-     * Tarea programada que se ejecuta cada minuto para actualizar el estado de los viajes.
-     * Cron: "segundo minuto hora día-del-mes mes día-de-la-semana"
-     * "0 * * * * *" significa "a los 0 segundos de cada minuto".
-     */
     @Scheduled(cron = "0 * * * * *")
     @Transactional
     public void actualizarEstadosDeViajes() {
-        logger.info("Ejecutando tarea programada de actualización de estados de viaje a las {}", LocalDateTime.now());
 
-        // Obtenemos la fecha y hora actuales UNA VEZ para consistencia en la ejecución
-        LocalDate fechaActual = LocalDate.now();
-        LocalTime horaActual = LocalTime.now();
+        // --- OBTENEMOS LA HORA ACTUAL USANDO LA ZONA HORARIA CORRECTA ---
+        LocalDateTime ahoraEnUruguay = LocalDateTime.now(ZONA_HORARIA_URUGUAY);
+        LocalDate fechaActual = ahoraEnUruguay.toLocalDate();
+        LocalTime horaActual = ahoraEnUruguay.toLocalTime();
+
+        logger.info("Ejecutando tarea programada. Hora actual (Uruguay): {}", ahoraEnUruguay);
 
         // 1. Actualizar viajes de PROGRAMADO a EN_CURSO
         actualizarViajesAEnCurso(fechaActual, horaActual);
@@ -54,42 +55,52 @@ public class ViajeStatusScheduler {
     }
 
     private void actualizarViajesAEnCurso(LocalDate fechaActual, LocalTime horaActual) {
+        // La consulta en el repositorio ya está bien, no necesita cambios.
         List<Viaje> viajesParaIniciar = viajeRepository.findScheduledTripsToStart(fechaActual, horaActual);
 
         if (!viajesParaIniciar.isEmpty()) {
-            logger.info("Se encontraron {} viajes programados para pasar a EN_CURSO.", viajesParaIniciar.size());
+            logger.info("[!] Encontrados {} viajes para cambiar a EN_CURSO.", viajesParaIniciar.size());
             for (Viaje viaje : viajesParaIniciar) {
-                logger.debug("Cambiando viaje ID {} a EN_CURSO.", viaje.getId());
+                logger.info("--> Cambiando viaje ID {} de PROGRAMADO a EN_CURSO. Hora de salida: {}", viaje.getId(), viaje.getHoraSalida());
                 viaje.setEstado(EstadoViaje.EN_CURSO);
+
+                // Aquí también actualizamos el estado del bus a "ASIGNADO_A_VIAJE" por si acaso
+                // no se hizo antes, aunque la lógica de creación de viaje ya lo hace.
+                // Es una buena práctica ser defensivo.
+                Omnibus bus = viaje.getBusAsignado();
+                if (bus != null && bus.getEstado() != EstadoBus.ASIGNADO_A_VIAJE) {
+                    logger.warn("El bus {} del viaje {} no estaba como ASIGNADO_A_VIAJE. Actualizando.", bus.getMatricula(), viaje.getId());
+                    bus.setEstado(EstadoBus.ASIGNADO_A_VIAJE);
+                    omnibusRepository.save(bus);
+                }
             }
-            // Guardamos todos los cambios en una sola operación de base de datos
             viajeRepository.saveAll(viajesParaIniciar);
         }
     }
 
     private void actualizarViajesAFinalizado(LocalDate fechaActual, LocalTime horaActual) {
+        // La consulta en el repositorio ya está bien, no necesita cambios.
         List<Viaje> viajesParaFinalizar = viajeRepository.findOngoingTripsToFinish(fechaActual, horaActual);
 
         if (!viajesParaFinalizar.isEmpty()) {
-            logger.info("Se encontraron {} viajes en curso para pasar a FINALIZADO.", viajesParaFinalizar.size());
+            logger.info("[!] Encontrados {} viajes para cambiar a FINALIZADO.", viajesParaFinalizar.size());
             for (Viaje viaje : viajesParaFinalizar) {
-                logger.debug("Finalizando viaje ID {}.", viaje.getId());
+                logger.info("--> Finalizando viaje ID {}. Hora de llegada: {}", viaje.getId(), viaje.getHoraLlegada());
                 viaje.setEstado(EstadoViaje.FINALIZADO);
 
-                // IMPORTANTE: Replicar la lógica de negocio de finalizarViaje
+                // IMPORTANTE: Aquí es donde el estado del BUS se actualiza
                 Omnibus bus = viaje.getBusAsignado();
                 if (bus != null) {
-                    // El bus ahora se encuentra en la localidad de destino del viaje
+                    logger.info("Actualizando bus {} (ID {}): nueva ubicación -> {}, nuevo estado -> OPERATIVO",
+                            bus.getMatricula(), bus.getId(), viaje.getDestino().getNombre());
+
                     bus.setLocalidadActual(viaje.getDestino());
-                    // El bus queda libre y operativo para otro viaje
-                    bus.setEstado(EstadoBus.OPERATIVO);
-                    // Guardamos el estado actualizado del bus
+                    bus.setEstado(EstadoBus.OPERATIVO); // El bus queda libre
                     omnibusRepository.save(bus);
                 } else {
                     logger.warn("El viaje ID {} que se está finalizando no tiene un bus asignado.", viaje.getId());
                 }
             }
-            // Guardamos todos los cambios de los viajes
             viajeRepository.saveAll(viajesParaFinalizar);
         }
     }

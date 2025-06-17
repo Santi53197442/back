@@ -75,6 +75,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/paypal/**").permitAll() //PARA PAYPAL
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/localidades-disponibles").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/buscar-disponibles").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/listado-precios").permitAll()
 
                         // --- ENDPOINTS ACCESIBLES POR CLIENTES, VENDEDORES Y ADMINS (DENTRO DE /api/vendedor) ---
 

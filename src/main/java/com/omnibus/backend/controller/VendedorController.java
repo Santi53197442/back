@@ -680,7 +680,7 @@ public class VendedorController {
     }
 
     @GetMapping("/viajes/listado-precios")
-    @PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')") // Accesible para Vendedores y Admins
+    //@PreAuthorize("hasAnyRole('VENDEDOR', 'ADMINISTRADOR')") // Accesible para Vendedores y Admins
     public ResponseEntity<?> listarViajesConPrecio() {
         try {
             logger.info("Solicitud para obtener el listado de todos los viajes con sus precios.");

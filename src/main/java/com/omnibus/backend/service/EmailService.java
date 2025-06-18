@@ -5,6 +5,7 @@ import com.omnibus.backend.dto.PasajeResponseDTO;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder; // <-- NUEVA IMPORTACIÓN
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import java.util.Base64;
 import java.io.ByteArrayOutputStream; // <-- NUEVA IMPORTACIÓN
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
-
+@Setter
 @Service
 public class EmailService {
 

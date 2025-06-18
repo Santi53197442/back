@@ -6,6 +6,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -13,6 +14,7 @@ import lombok.AllArgsConstructor;
 @Entity
 @Table(name = "localidades")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Localidad {

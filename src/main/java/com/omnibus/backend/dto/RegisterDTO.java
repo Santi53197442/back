@@ -1,7 +1,14 @@
 package com.omnibus.backend.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.time.LocalDate;
 
+@Setter
+@Getter
+@AllArgsConstructor
 public class RegisterDTO {
     public String nombre;
     public String apellido;
@@ -11,4 +18,6 @@ public class RegisterDTO {
     public Integer telefono;
     public LocalDate fechaNac;
     public String rol;
+
+
 }

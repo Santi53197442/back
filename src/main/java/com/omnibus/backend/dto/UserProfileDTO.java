@@ -18,6 +18,7 @@ public class UserProfileDTO {
     private String rol;
 
     // Constructor
+    public UserProfileDTO() {}
     public UserProfileDTO(Usuario usuario) {
         this.id = usuario.getId(); // <<-- CAMBIO #2: AÑADIDO
         this.email = usuario.getEmail();

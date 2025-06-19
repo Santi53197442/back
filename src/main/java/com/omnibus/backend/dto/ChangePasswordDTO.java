@@ -2,7 +2,9 @@ package com.omnibus.backend.dto;
 
 import jakarta.validation.constraints.NotBlank; // O javax.validation.constraints.NotBlank si usas una versión anterior de Spring Boot
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 
+@AllArgsConstructor
 public class ChangePasswordDTO {
 
     @NotBlank(message = "La contraseña actual no puede estar vacía.")

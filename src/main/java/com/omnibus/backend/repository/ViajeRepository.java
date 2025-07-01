@@ -77,4 +77,11 @@ public interface ViajeRepository extends JpaRepository<Viaje, Integer>, JpaSpeci
     List<Viaje> findByEstado(EstadoViaje estado);
     List<Viaje> findByBusAsignado_Id(Long omnibusId);
     List<Viaje> findByBusAsignado_IdAndEstadoIn(Long busId, List<EstadoViaje> estados);
+
+    @Query("SELECT v FROM Viaje v WHERE v.estado = com.omnibus.backend.model.EstadoViaje.PROGRAMADO AND v.fechaHoraSalida <= :unaHoraDespues AND v.fechaHoraSalida > :ahora")
+    List<Viaje> findTripsToCloseSales(@Param("ahora") LocalDateTime ahora, @Param("unaHoraDespues") LocalDateTime unaHoraDespues);
+
+    @Query("SELECT v FROM Viaje v WHERE v.estado = com.omnibus.backend.model.EstadoViaje.VENTAS_CERRADAS AND v.fechaHoraSalida <= :ahora")
+    List<Viaje> findTripsToStart(@Param("ahora") LocalDateTime ahora);
+
 }

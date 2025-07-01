@@ -72,4 +72,5 @@ public interface PasajeRepository extends JpaRepository<Pasaje, Integer> {
      */
     long countByDatosViajeAndClienteAndEstado(Viaje viaje, Usuario cliente, EstadoPasaje estado);
 
+    List<Pasaje> findByDatosViajeAndEstado(Viaje viaje, EstadoPasaje estado);
 }

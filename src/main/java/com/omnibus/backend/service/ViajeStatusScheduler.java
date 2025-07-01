@@ -1,10 +1,8 @@
 package com.omnibus.backend.service;
 
-import com.omnibus.backend.model.EstadoBus;
-import com.omnibus.backend.model.EstadoViaje;
-import com.omnibus.backend.model.Omnibus;
-import com.omnibus.backend.model.Viaje;
+import com.omnibus.backend.model.*;
 import com.omnibus.backend.repository.OmnibusRepository;
+import com.omnibus.backend.repository.PasajeRepository;
 import com.omnibus.backend.repository.ViajeRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
@@ -26,11 +24,15 @@ public class ViajeStatusScheduler {
 
     private final ViajeRepository viajeRepository;
     private final OmnibusRepository omnibusRepository;
+    private final PasajeRepository pasajeRepository; // <-- NUEVA DEPENDENCIA
+    private final EmailService emailService;         // <-- NUEVA DEPENDENCIA
 
     @Autowired
-    public ViajeStatusScheduler(ViajeRepository viajeRepository, OmnibusRepository omnibusRepository) {
+    public ViajeStatusScheduler(ViajeRepository viajeRepository, OmnibusRepository omnibusRepository, PasajeRepository pasajeRepository, EmailService emailService) {
         this.viajeRepository = viajeRepository;
         this.omnibusRepository = omnibusRepository;
+        this.pasajeRepository = pasajeRepository;
+        this.emailService = emailService;
     }
 
     @Scheduled(cron = "0 * * * * *")
@@ -40,6 +42,7 @@ public class ViajeStatusScheduler {
         logger.info("Ejecutando tarea programada. Hora actual (Uruguay): {}", ahoraEnUruguay);
 
         limpiarYFinalizarViajesAtascados(ahoraEnUruguay);
+        cerrarVentasYNotificar(ahoraEnUruguay);
         actualizarViajesAEnCurso(ahoraEnUruguay);
         actualizarViajesAFinalizado(ahoraEnUruguay);
     }
@@ -57,11 +60,12 @@ public class ViajeStatusScheduler {
     }
 
     private void actualizarViajesAEnCurso(LocalDateTime ahora) {
-        List<Viaje> viajesParaIniciar = viajeRepository.findScheduledTripsToStart(ahora);
+        // Buscamos viajes que ya pasaron su hora de salida y están en VENTAS_CERRADAS
+        List<Viaje> viajesParaIniciar = viajeRepository.findTripsToStart(ahora); // ¡Necesitas modificar esta consulta!
         if (!viajesParaIniciar.isEmpty()) {
             logger.info("[!] Se encontraron {} viajes para cambiar a EN_CURSO.", viajesParaIniciar.size());
             for (Viaje viaje : viajesParaIniciar) {
-                logger.info("--> Cambiando viaje ID {} de PROGRAMADO a EN_CURSO. Hora de salida: {}", viaje.getId(), viaje.getFechaHoraSalida());
+                logger.info("--> Cambiando viaje ID {} de {} a EN_CURSO. Hora de salida: {}", viaje.getId(), viaje.getEstado(), viaje.getFechaHoraSalida());
                 viaje.setEstado(EstadoViaje.EN_CURSO);
             }
             viajeRepository.saveAll(viajesParaIniciar);
@@ -102,6 +106,35 @@ public class ViajeStatusScheduler {
 
         } catch (EntityNotFoundException e) {
             logger.error("...[ERROR CRÍTICO] " + e.getMessage());
+        }
+    }
+
+    private void cerrarVentasYNotificar(LocalDateTime ahora) {
+        LocalDateTime limiteDeCierre = ahora.plusHours(1);
+        List<Viaje> viajesParaCerrarVentas = viajeRepository.findTripsToCloseSales(ahora, limiteDeCierre);
+
+        if (!viajesParaCerrarVentas.isEmpty()) {
+            logger.info("[!] Se encontraron {} viajes para CERRAR VENTAS y notificar a los pasajeros.", viajesParaCerrarVentas.size());
+
+            for (Viaje viaje : viajesParaCerrarVentas) {
+                logger.info("--> Cerrando ventas para el viaje ID {}. Hora de salida: {}", viaje.getId(), viaje.getFechaHoraSalida());
+                viaje.setEstado(EstadoViaje.VENTAS_CERRADAS);
+
+                // Ahora, notificar a los pasajeros con pasajes VENDIDOS
+                // Usamos el nuevo método del repositorio
+                List<Pasaje> pasajesDelViaje = pasajeRepository.findByDatosViajeAndEstado(viaje, EstadoPasaje.VENDIDO);
+                logger.info("...Encontrados {} pasajeros con pasajes VENDIDOS para notificar en el viaje ID {}.", pasajesDelViaje.size(), viaje.getId());
+
+                for (Pasaje pasaje : pasajesDelViaje) {
+                    try {
+                        emailService.sendDepartureReminderEmail(pasaje);
+                    } catch (Exception e) {
+                        logger.error("...[ERROR] No se pudo enviar el recordatorio al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
+                                pasaje.getCliente().getId(), pasaje.getCliente().getEmail(), viaje.getId(), e.getMessage());
+                    }
+                }
+            }
+            viajeRepository.saveAll(viajesParaCerrarVentas);
         }
     }
 }

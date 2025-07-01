@@ -2,6 +2,9 @@ package com.omnibus.backend.service;
 
 import com.google.zxing.WriterException;
 import com.omnibus.backend.dto.PasajeResponseDTO;
+import com.omnibus.backend.model.Pasaje;
+import com.omnibus.backend.model.Usuario;
+import com.omnibus.backend.model.Viaje;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder; // <-- NUEVA IMPORTACIÓN
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -210,5 +213,75 @@ public class EmailService {
                 qrCodeSrc, // <-- CAMBIO: Se usa el parámetro qrCodeSrc
                 ticketNumber
         );
+    }
+
+
+    /**
+     * NUEVO: Envía un correo de recordatorio de viaje a un pasajero.
+     * @param pasaje El objeto Pasaje con toda la información necesaria.
+     */
+    public void sendDepartureReminderEmail(Pasaje pasaje) throws MessagingException {
+        MimeMessage mimeMessage = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+        // Obtenemos los objetos relacionados usando tus getters
+        Viaje viaje = pasaje.getDatosViaje();
+        Usuario cliente = pasaje.getCliente();
+
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+
+        helper.setFrom(fromEmail);
+        helper.setTo(cliente.getEmail()); // <-- Obtenemos email del Usuario
+        helper.setSubject("⏰ Recordatorio: Tu viaje a " + viaje.getDestino().getNombre() + " sale pronto");
+
+        // Asumo que tu entidad Usuario tiene un método getNombre() o similar.
+        // Si se llama diferente (ej. getNombreCompleto()), ajústalo aquí.
+        String nombreCliente = cliente.getNombre();
+
+        String htmlContent = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; color: #333; }
+                .container { padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px; margin: auto; }
+                .header { font-size: 24px; color: #0056b3; }
+                .details { margin-top: 20px; }
+                .details p { margin: 5px 0; }
+                .footer { margin-top: 25px; font-size: 12px; color: #777; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="header">¡Hola, %s!</h1>
+                <p>Este es un recordatorio amistoso sobre tu próximo viaje.</p>
+                <div class="details">
+                    <p><strong>Destino:</strong> %s</p>
+                    <p><strong>Origen:</strong> %s</p>
+                    <p><strong>Fecha de Salida:</strong> %s</p>
+                    <p><strong>Hora de Salida:</strong> %s</p>
+                    <p><strong>Número de Asiento:</strong> %d</p>
+                </div>
+                <p>Por favor, asegúrate de llegar a la terminal con tiempo suficiente para el embarque.</p>
+                <p>¡Te deseamos un excelente viaje!</p>
+                <div class="footer">
+                    <p>Equipo de Omnibus</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """.formatted(
+                nombreCliente,
+                viaje.getDestino().getNombre(),
+                viaje.getOrigen().getNombre(),
+                viaje.getFechaHoraSalida().format(dateFormatter),
+                viaje.getFechaHoraSalida().format(timeFormatter),
+                pasaje.getNumeroAsiento() // <-- Usamos el getter de Pasaje
+        );
+
+        helper.setText(htmlContent, true);
+        mailSender.send(mimeMessage);
+        logger.info("Email de recordatorio de viaje enviado a {}", cliente.getEmail());
     }
 }

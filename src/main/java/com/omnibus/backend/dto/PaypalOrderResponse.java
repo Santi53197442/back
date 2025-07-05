@@ -1,21 +1,28 @@
 package com.omnibus.backend.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty; // <-- IMPORTACIÓN AÑADIDA
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor; // <-- IMPORTACIÓN AÑADIDA
+import lombok.AllArgsConstructor;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor // <-- ANOTACIÓN AÑADIDA para generar un constructor con todos los argumentos
+@AllArgsConstructor
 public class PaypalOrderResponse {
     private String id;
     private String status;
+    private String intent;
+    
+    // ✅ SOLO la estructura estándar de PayPal
+    private List<PaypalLink> links;
 
-    // --- CAMBIO AÑADIDO ---
-    // Este campo almacenará el enlace de aprobación que necesitamos.
-    // Usamos @JsonProperty para que, si en el futuro decides mapear directamente,
-    // Jackson sepa cómo manejarlo, aunque en nuestra solución lo llenaremos manualmente.
-    @JsonProperty("approve_link")
-    private String approveLink;
+    // ✅ Clase interna para representar cada link de PayPal
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PaypalLink {
+        private String href;
+        private String rel;
+        private String method;
+    }
 }

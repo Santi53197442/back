@@ -14,8 +14,11 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class PaypalService {
@@ -69,86 +72,95 @@ public class PaypalService {
     }
 
     /**
-     * Crea una orden de pago en PayPal.
-     * @param amount El monto total de la orden.
-     * @return Un objeto PaypalOrderResponse con el ID, estado y el ENLACE DE APROBACIÓN de la orden.
-     */
-    public PaypalOrderResponse createOrder(double amount) {
-        String accessToken = getAccessToken();
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + accessToken);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+ * Crea una orden de pago en PayPal.
+ * @param amount El monto total de la orden.
+ * @return Un objeto PaypalOrderResponse con TODA la información de la orden incluyendo links.
+ */
+public PaypalOrderResponse createOrder(double amount) {
+    String accessToken = getAccessToken();
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("Authorization", "Bearer " + accessToken);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
 
-        // --- CAMBIO IMPORTANTE: Cuerpo de la Petición ---
-        // Se añade "application_context" que es requerido por PayPal para redirigir al usuario
-        // después del pago (return_url) o si lo cancela (cancel_url).
-        // ¡RECUERDA CAMBIAR ESTAS URLS POR LAS DE TU APLICACIÓN REAL!
-        String requestBody = String.format(Locale.US, """
+    // ✅ Cuerpo de la petición con application_context
+    String requestBody = String.format(Locale.US, """
+            {
+              "intent": "CAPTURE",
+              "purchase_units": [
                 {
-                  "intent": "CAPTURE",
-                  "purchase_units": [
-                    {
-                      "amount": {
-                        "currency_code": "USD",
-                        "value": "%.2f"
-                      }
-                    }
-                  ],
-                  "application_context": {
-                    "return_url": "https://example.com/payment-success",
-                    "cancel_url": "https://example.com/payment-cancelled"
+                  "amount": {
+                    "currency_code": "USD",
+                    "value": "%.2f"
                   }
                 }
-                """, amount);
-
-        HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
-
-        try {
-            logger.info("Enviando a PayPal para crear orden: {}", requestBody);
-
-            // --- CAMBIO 1: Recibimos la respuesta como un JsonNode para tener acceso a todos los datos.
-            ResponseEntity<JsonNode> responseEntity = restTemplate.postForEntity(
-                    baseUrl + "/v2/checkout/orders", entity, JsonNode.class);
-
-            JsonNode responseNode = responseEntity.getBody();
-            if (responseNode == null) {
-                throw new RuntimeException("La respuesta de PayPal para crear la orden fue nula.");
+              ],
+              "application_context": {
+                "return_url": "https://example.com/payment-success",
+                "cancel_url": "https://example.com/payment-cancelled"
+              }
             }
+            """, amount);
 
-            logger.debug("Respuesta completa de PayPal al crear orden: {}", responseNode.toString());
+    HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
 
-            // --- CAMBIO 2: Extraemos los datos que nos interesan del JsonNode.
-            String orderId = responseNode.path("id").asText();
-            String status = responseNode.path("status").asText();
-            String approveLink = null;
+    try {
+        logger.info("Enviando a PayPal para crear orden: {}", requestBody);
 
-            // La respuesta de PayPal contiene un array de "links". Debemos iterarlo para encontrar
-            // el que tiene la relación (rel) "approve".
-            if (responseNode.has("links")) {
-                for (JsonNode linkNode : responseNode.get("links")) {
-                    if ("approve".equals(linkNode.path("rel").asText())) {
-                        approveLink = linkNode.path("href").asText();
-                        break; // Encontramos el link, salimos del bucle.
-                    }
-                }
-            }
+        // ✅ Recibir respuesta completa como JsonNode
+        ResponseEntity<JsonNode> responseEntity = restTemplate.postForEntity(
+                baseUrl + "/v2/checkout/orders", entity, JsonNode.class);
 
-            if (approveLink == null) {
-                logger.error("No se encontró el 'approve link' en la respuesta de PayPal: {}", responseNode.toString());
-                throw new RuntimeException("No se pudo obtener el enlace de aprobación de PayPal.");
-            }
-
-            // --- CAMBIO 3: Creamos y devolvemos nuestro DTO con toda la información.
-            // Esto requiere que tu DTO PaypalOrderResponse tenga un constructor que acepte estos 3 argumentos.
-            // Si usas Lombok, puedes añadir @AllArgsConstructor a la clase DTO.
-            return new PaypalOrderResponse(orderId, status, approveLink);
-
-        } catch (Exception e) {
-            logger.error("Error al crear la orden en PayPal para el monto {}", amount, e);
-            throw new RuntimeException("Error al crear la orden de PayPal", e);
+        JsonNode responseNode = responseEntity.getBody();
+        if (responseNode == null) {
+            throw new RuntimeException("La respuesta de PayPal para crear la orden fue nula.");
         }
+
+        logger.debug("Respuesta completa de PayPal al crear orden: {}", responseNode.toString());
+
+        // ✅ Extraer datos básicos
+        String orderId = responseNode.path("id").asText();
+        String status = responseNode.path("status").asText();
+        String intent = responseNode.path("intent").asText();
+
+        // ✅ Procesar TODOS los links de PayPal
+        List<PaypalOrderResponse.PaypalLink> links = new ArrayList<>();
+
+        if (responseNode.has("links")) {
+            for (JsonNode linkNode : responseNode.get("links")) {
+                String href = linkNode.path("href").asText();
+                String rel = linkNode.path("rel").asText();
+                String method = linkNode.path("method").asText();
+
+                // ✅ Añadir cada link a la lista
+                links.add(new PaypalOrderResponse.PaypalLink(href, rel, method));
+            }
+        }
+
+        // ✅ Validar que tengamos al menos el link de approve
+        boolean hasApproveLink = links.stream()
+            .anyMatch(link -> "approve".equals(link.getRel()));
+            
+        if (!hasApproveLink) {
+            logger.error("No se encontró el 'approve link' en la respuesta de PayPal: {}", responseNode.toString());
+            throw new RuntimeException("No se pudo obtener el enlace de aprobación de PayPal.");
+        }
+
+        // ✅ Crear respuesta con estructura estándar de PayPal
+        PaypalOrderResponse response = new PaypalOrderResponse();
+        response.setId(orderId);
+        response.setStatus(status);
+        response.setIntent(intent);
+        response.setLinks(links);
+
+        logger.info("Orden de PayPal creada exitosamente. ID: {}, Links: {}", orderId, links.size());
+        return response;
+
+    } catch (Exception e) {
+        logger.error("Error al crear la orden en PayPal para el monto {}", amount, e);
+        throw new RuntimeException("Error al crear la orden de PayPal", e);
     }
+}
 
     /**
      * Captura (finaliza) el pago de una orden que ya ha sido aprobada por el usuario.

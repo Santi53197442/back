@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,11 +24,25 @@ public class FirebaseConfig {
     public FirebaseApp firebaseApp() throws IOException {
         if (FirebaseApp.getApps().isEmpty()) {
             try {
-                // Cargar las credenciales desde el archivo JSON
-                InputStream serviceAccount = new ClassPathResource("firebase-service-account.json").getInputStream();
+                GoogleCredentials credentials;
+                
+                // 🔥 INTENTAR CARGAR DESDE VARIABLE DE ENTORNO PRIMERO
+                String firebaseJson = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
+                
+                if (firebaseJson != null && !firebaseJson.isEmpty()) {
+                    // Producción: usar variable de entorno
+                    logger.info("Cargando credenciales Firebase desde variable de entorno");
+                    InputStream credentialsStream = new ByteArrayInputStream(firebaseJson.getBytes());
+                    credentials = GoogleCredentials.fromStream(credentialsStream);
+                } else {
+                    // Desarrollo: usar archivo local
+                    logger.info("Cargando credenciales Firebase desde archivo local");
+                    InputStream serviceAccount = new ClassPathResource("firebase-service-account.json").getInputStream();
+                    credentials = GoogleCredentials.fromStream(serviceAccount);
+                }
                 
                 FirebaseOptions options = FirebaseOptions.builder()
-                        .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                        .setCredentials(credentials)
                         .build();
 
                 FirebaseApp app = FirebaseApp.initializeApp(options);

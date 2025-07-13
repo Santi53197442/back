@@ -19,6 +19,18 @@ import java.util.Collections;
 @PrimaryKeyJoinColumn(name = "usuario_id")
 public class Cliente extends Usuario {
 
+    @Column(name = "fcm_token", nullable = true)
+    private String fcmToken;
+
+    // Getter y Setter
+    public String getFcmToken() {
+        return fcmToken;
+    }
+
+    public void setFcmToken(String fcmToken) {
+        this.fcmToken = fcmToken;
+    }
+
     // --- NUEVO CAMPO ---
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_cliente", nullable = false)

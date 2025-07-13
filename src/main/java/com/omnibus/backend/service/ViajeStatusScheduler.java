@@ -28,6 +28,9 @@ public class ViajeStatusScheduler {
     private final EmailService emailService;         // <-- NUEVA DEPENDENCIA
 
     @Autowired
+    private FirebaseNotificationService firebaseNotificationService;
+
+    @Autowired
     public ViajeStatusScheduler(ViajeRepository viajeRepository, OmnibusRepository omnibusRepository, PasajeRepository pasajeRepository, EmailService emailService) {
         this.viajeRepository = viajeRepository;
         this.omnibusRepository = omnibusRepository;
@@ -130,6 +133,15 @@ public class ViajeStatusScheduler {
                         emailService.sendDepartureReminderEmail(pasaje);
                     } catch (Exception e) {
                         logger.error("...[ERROR] No se pudo enviar el recordatorio al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
+                                pasaje.getCliente().getId(), pasaje.getCliente().getEmail(), viaje.getId(), e.getMessage());
+                    }
+
+                    try {
+                        // Enviar notificación push
+                        firebaseNotificationService.sendVentasCerradasNotification(pasaje);
+                        logger.info("...Notificación push enviada a cliente ID {} para viaje ID {}", pasaje.getCliente().getId(), viaje.getId());
+                    } catch (Exception e) {
+                        logger.error("...[ERROR] No se pudo enviar notificación push al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
                                 pasaje.getCliente().getId(), pasaje.getCliente().getEmail(), viaje.getId(), e.getMessage());
                     }
                 }

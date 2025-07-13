@@ -3,6 +3,7 @@ package com.omnibus.backend.controller;
 
 import com.omnibus.backend.dto.PasajeResponseDTO; // Asegúrate que este DTO exista y sea adecuado
 import com.omnibus.backend.service.pasajeService; // Servicio para la lógica de pasajes
+import com.omnibus.backend.service.UserService;
 
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
@@ -11,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication; // Agregar esta importación
 
 import java.util.Collections;
 import java.util.List;
@@ -24,10 +27,12 @@ public class ClienteController {
     private static final Logger logger = LoggerFactory.getLogger(ClienteController.class);
 
     private final pasajeService pasajeService;
+    private final UserService userService; 
 
     @Autowired
-    public ClienteController(pasajeService pasajeService) {
+    public ClienteController(pasajeService pasajeService, UserService userService) {
         this.pasajeService = pasajeService;
+        this.userService = userService;
     }
 
     /**
@@ -68,6 +73,46 @@ public class ClienteController {
             logger.error("API: Error interno al obtener el historial de pasajes para el cliente ID {}: {}", clienteId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Error interno al procesar la solicitud de historial de pasajes."));
+        }
+    }
+
+    /**
+     * Actualiza el token FCM del cliente autenticado para recibir notificaciones push.
+     * Solo los clientes pueden registrar tokens FCM.
+     */
+    @PutMapping("/fcm-token")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<?> actualizarFcmToken(@RequestBody Map<String, String> request) {
+        try {
+            String token = request.get("token");
+            if (token == null || token.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Token FCM es requerido"));
+            }
+
+            // Obtener el cliente autenticado usando Spring Security
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+            
+            // Usar UserService para actualizar el token FCM
+            boolean tokenActualizado = userService.actualizarTokenFCM(email, token);
+            
+            if (tokenActualizado) {
+                logger.info("Token FCM actualizado para cliente: {}", email);
+                return ResponseEntity.ok(Map.of("message", "Token FCM actualizado exitosamente"));
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Cliente no encontrado"));
+            }
+
+        } catch (IllegalArgumentException e) {
+            logger.warn("Error de validación al actualizar token FCM: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error al actualizar token FCM: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno del servidor"));
         }
     }
 }

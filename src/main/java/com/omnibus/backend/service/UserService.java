@@ -208,4 +208,56 @@ public class UserService {
             );
         }).collect(Collectors.toList());
     }
+
+    /**
+     * Actualiza el token FCM para un cliente específico identificado por email.
+     * Solo los usuarios de tipo Cliente pueden tener token FCM.
+     * 
+     * @param email Email del cliente
+     * @param fcmToken Token FCM a actualizar
+     * @return true si se actualizó correctamente, false si el usuario no es un cliente
+     * @throws UsernameNotFoundException si no se encuentra el usuario
+     */
+    @Transactional
+    public boolean actualizarTokenFCM(String email, String fcmToken) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con email: " + email));
+        
+        // Verificar que el usuario sea un Cliente (solo los clientes usan la app móvil)
+        if (!(usuario instanceof Cliente)) {
+            throw new IllegalArgumentException("Solo los clientes pueden recibir notificaciones push");
+        }
+        
+        Cliente cliente = (Cliente) usuario;
+        cliente.setFcmToken(fcmToken);
+        usuarioRepository.save(cliente);
+        
+        return true;
+    }
+
+    /**
+     * Limpia el token FCM de un cliente (útil cuando se desloguea o desinstala la app)
+     * 
+     * @param email Email del cliente
+     * @return true si se limpió correctamente
+     */
+    @Transactional
+    public boolean limpiarTokenFCM(String email) {
+        try {
+            Usuario usuario = usuarioRepository.findByEmail(email)
+                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con email: " + email));
+            
+            if (usuario instanceof Cliente) {
+                Cliente cliente = (Cliente) usuario;
+                cliente.setFcmToken(null);
+                usuarioRepository.save(cliente);
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            // Log del error pero no lanzar excepción, ya que limpiar el token no es crítico
+            System.err.println("Error al limpiar token FCM para " + email + ": " + e.getMessage());
+            return false;
+        }
+    }
 }

@@ -2,6 +2,7 @@ package com.omnibus.backend.service;
 
 import com.omnibus.backend.dto.PasajeResponseDTO;
 import com.google.zxing.WriterException;
+import com.omnibus.backend.model.Pasaje;
 import jakarta.mail.MessagingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,19 @@ public class AsyncService {
             emailService.buildAndSendTicket(pasaje);
         } catch (Exception e) {
             logger.error("Error en la tarea asíncrona de envío de email para pasaje ID {}: {}", pasaje.getId(), e.getMessage(), e);
+        }
+    }
+
+    @Async("taskExecutor") // Usa el mismo ejecutor de tareas que tus otros métodos async
+    public void sendRefundEmailAsync(Pasaje pasaje, double montoReembolsado) {
+        try {
+            logger.info("Iniciando envío asíncrono de email de DEVOLUCIÓN para pasaje ID: {}", pasaje.getId());
+            emailService.sendRefundConfirmationEmail(pasaje, montoReembolsado);
+        } catch (Exception e) {
+            // Logueamos el error completo pero no relanzamos la excepción para no afectar
+            // a otros hilos asíncronos.
+            logger.error("Error en tarea asíncrona al enviar email de DEVOLUCIÓN para pasaje ID {}: {}",
+                    pasaje.getId(), e.getMessage(), e);
         }
     }
 }

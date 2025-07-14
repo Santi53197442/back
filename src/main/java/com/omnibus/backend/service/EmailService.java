@@ -22,6 +22,7 @@ import java.util.Base64;
 import java.io.ByteArrayOutputStream; // <-- NUEVA IMPORTACIÓN
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 @Service
 public class EmailService {
@@ -284,4 +285,80 @@ public class EmailService {
         mailSender.send(mimeMessage);
         logger.info("Email de recordatorio de viaje enviado a {}", cliente.getEmail());
     }
+
+    public void sendRefundConfirmationEmail(Pasaje pasaje, double montoReembolsado) throws MessagingException {
+        MimeMessage mimeMessage = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+        Viaje viaje = pasaje.getDatosViaje();
+        Usuario cliente = pasaje.getCliente();
+
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+        helper.setFrom(fromEmail);
+        helper.setTo(cliente.getEmail());
+        helper.setSubject("✅ Devolución procesada - Viaje a " + viaje.getDestino().getNombre());
+
+        String nombreCliente = cliente.getNombre();
+
+        // Usamos Locale.US para asegurar que el punto sea el separador decimal
+        String montoFormateado = String.format(Locale.US, "%.2f", montoReembolsado);
+
+        String htmlContent = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; color: #333; }
+                .container { padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px; margin: auto; }
+                .header { font-size: 24px; color: #1a73e8; }
+                .details { margin-top: 20px; }
+                .details p { margin: 5px 0; }
+                .highlight { color: #d93025; font-weight: bold; }
+                .footer { margin-top: 25px; font-size: 12px; color: #777; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="header">Confirmación de Devolución</h1>
+                <p>Hola, %s,</p>
+                <p>Te confirmamos que la devolución de tu pasaje ha sido procesada exitosamente.</p>
+                
+                <div class="details">
+                    <h3>Detalles del Pasaje Devuelto</h3>
+                    <p><strong>Destino:</strong> %s</p>
+                    <p><strong>Origen:</strong> %s</p>
+                    <p><strong>Fecha de Salida:</strong> %s</p>
+                    <p><strong>Número de Asiento:</strong> %d</p>
+                </div>
+
+                <div class="details">
+                    <h3>Detalles del Reembolso</h3>
+                    <p>Hemos procesado un reembolso a tu cuenta de PayPal.</p>
+                    <p><strong>Monto Reembolsado:</strong> $%s USD</p>
+                    <p class="highlight">Por favor, ten en cuenta que el reembolso puede tardar unos días en verse reflejado en tu cuenta, dependiendo de los tiempos de procesamiento de PayPal y tu banco.</p>
+                </div>
+                
+                <p>Lamentamos que no puedas viajar con nosotros en esta ocasión y esperamos verte pronto.</p>
+
+                <div class="footer">
+                    <p>Equipo de Omnibus</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """.formatted(
+                nombreCliente,
+                viaje.getDestino().getNombre(),
+                viaje.getOrigen().getNombre(),
+                viaje.getFechaHoraSalida().format(dateFormatter),
+                pasaje.getNumeroAsiento(),
+                montoFormateado // Usamos la variable ya formateada
+        );
+
+        helper.setText(htmlContent, true);
+        mailSender.send(mimeMessage);
+        logger.info("Email de confirmación de devolución enviado a {}", cliente.getEmail());
+    }
 }
+

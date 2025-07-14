@@ -38,6 +38,8 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
     private final UsuarioRepository usuarioRepository;
     private final PaypalService paypalService;
     private final PrecioService precioService;
+    private final AsyncService asyncService;
+    private final NotificacionService notificacionService;
 
     // --- CONSTRUCTOR ÚNICO Y CORREGIDO ---
     // Spring usará este constructor para inyectar TODAS las dependencias necesarias.
@@ -46,12 +48,16 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                          ViajeRepository viajeRepository,
                          UsuarioRepository usuarioRepository,
                          PaypalService paypalService,
-                         PrecioService precioService) {
+                         PrecioService precioService,
+                         AsyncService asyncService,
+                         NotificacionService notificacionService) {
         this.pasajeRepository = pasajeRepository;
         this.viajeRepository = viajeRepository;
         this.usuarioRepository = usuarioRepository;
         this.paypalService = paypalService;
         this.precioService = precioService;
+        this.asyncService = asyncService;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional
@@ -425,9 +431,14 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
     public String procesarDevolucionPasaje(Integer pasajeId) {
         logger.info("Iniciando proceso de devolución para pasaje ID: {}", pasajeId);
 
-        // 1. Obtener el pasaje
+        // 1. Obtener las entidades necesarias
         Pasaje pasaje = pasajeRepository.findById(pasajeId)
                 .orElseThrow(() -> new EntityNotFoundException("Pasaje no encontrado con ID: " + pasajeId));
+
+        Viaje viaje = pasaje.getDatosViaje();
+        if (viaje == null) {
+            throw new IllegalStateException("El pasaje ID " + pasajeId + " no tiene un viaje asociado.");
+        }
 
         // 2. Validaciones de negocio
         if (pasaje.getEstado() != EstadoPasaje.VENDIDO) {
@@ -435,9 +446,9 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         }
 
         LocalDateTime ahora = LocalDateTime.now();
-        LocalDateTime fechaSalida = LocalDateTime.of(pasaje.getDatosViaje().getFecha(), pasaje.getDatosViaje().getHoraSalida());
+        LocalDateTime fechaSalida = viaje.getFechaHoraSalida();
         if (ahora.plusHours(24).isAfter(fechaSalida)) {
-            throw new IllegalStateException("El plazo para la devolución ha expirado (se requieren 24hs de antelación).");
+            throw new IllegalStateException("El plazo para la devolución ha expirado (se requieren al menos 24hs de antelación).");
         }
 
         if (pasaje.getPaypalTransactionId() == null || pasaje.getPaypalTransactionId().isBlank()) {
@@ -445,38 +456,50 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         }
 
         // 3. Calcular monto a reembolsar (con 10% de penalización)
-        // ¡Correcto! Usamos el precio guardado en el pasaje, que ya incluye descuentos.
         double precioPagado = pasaje.getPrecio();
         double montoPenalizacion = precioPagado * 0.10;
         double montoAReembolsar = precioPagado - montoPenalizacion;
 
-        // 4. Llamar a PayPal para el reembolso
+        // 4. Procesar el reembolso a través de PayPal
         JsonNode refundResponse = paypalService.refundPayment(pasaje.getPaypalTransactionId(), montoAReembolsar);
 
         if (refundResponse == null || !"COMPLETED".equals(refundResponse.path("status").asText())) {
             String status = refundResponse != null ? refundResponse.path("status").asText() : "N/A";
+            logger.error("Fallo en el reembolso de PayPal para pasaje ID {}. Estado recibido: {}", pasajeId, status);
             throw new RuntimeException("El reembolso en PayPal falló. Estado recibido: " + status);
         }
 
         String refundId = refundResponse.path("id").asText();
+        logger.info("Reembolso en PayPal completado con ID: {}", refundId);
 
-        // 5. Actualizar la base de datos
-        pasaje.setEstado(EstadoPasaje.CANCELADO); // O un nuevo estado "DEVUELTO" si lo prefieres
+        // 5. Actualizar la base de datos (Pasaje y Viaje)
+        pasaje.setEstado(EstadoPasaje.CANCELADO);
         pasaje.setPaypalRefundId(refundId);
-
-        Viaje viaje = pasaje.getDatosViaje();
-        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() + 1);
-
         pasajeRepository.save(pasaje);
+
+        viaje.setAsientosDisponibles(viaje.getAsientosDisponibles() + 1);
         viajeRepository.save(viaje);
 
         logger.info("Devolución exitosa para pasaje ID {}. Reembolsado: ${}. Nuevo estado: {}", pasajeId, montoAReembolsar, pasaje.getEstado());
 
-        // Aquí podrías llamar al servicio de notificaciones por email
-        // asyncService.sendRefundEmailAsync(pasaje, montoAReembolsar);
+        // 6. Enviar notificaciones al cliente
+        // 6.1 Notificación por EMAIL (Asíncrona para no retrasar la respuesta)
+        asyncService.sendRefundEmailAsync(pasaje, montoAReembolsar);
 
+        // 6.2 Notificación WEB (Directa, es una operación rápida)
+        try {
+            notificacionService.crearNotificacionDevolucion(pasaje, montoAReembolsar);
+        } catch (Exception e) {
+            // Si la notificación web falla, no queremos que la transacción principal se revierta.
+            // Solo lo registramos como un error.
+            logger.error("Error al crear la notificación web para la devolución del pasaje ID {}: {}", pasajeId, e.getMessage(), e);
+        }
+
+        // 7. Devolver mensaje de éxito
         return String.format(Locale.US, "Devolución procesada con éxito. Se reembolsó un total de $%.2f.", montoAReembolsar);
     }
+
+
     // --- NUEVO MÉTODO PARA BUSCAR UN PASAJE POR ID ---
     @Transactional(readOnly = true)
     public PasajeResponseDTO obtenerPasajePorId(Integer pasajeId) {

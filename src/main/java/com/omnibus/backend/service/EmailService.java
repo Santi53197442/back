@@ -5,9 +5,11 @@ import com.omnibus.backend.dto.PasajeResponseDTO;
 import com.omnibus.backend.model.Pasaje;
 import com.omnibus.backend.model.Usuario;
 import com.omnibus.backend.model.Viaje;
+import com.omnibus.backend.repository.PasajeRepository;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder; // <-- NUEVA IMPORTACIÓN
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +45,9 @@ public class EmailService {
         this.mailSender = mailSender;
         this.qrCodeService = qrCodeService;
     }
+
+    @Autowired
+    private PasajeRepository pasajeRepository;
 
     // Este método se mantiene igual
     public void sendPasswordResetEmail(String to, String token) {
@@ -286,36 +291,57 @@ public class EmailService {
         logger.info("Email de recordatorio de viaje enviado a {}", cliente.getEmail());
     }
 
-    public void sendRefundConfirmationEmail(Pasaje pasaje, double montoReembolsado) throws MessagingException {
+    /**
+     * Construye y envía un correo electrónico de confirmación de devolución y reembolso.
+     * Este método se llama de forma asíncrona, por lo que busca la entidad Pasaje
+     * desde la base de datos para evitar problemas de estado de la sesión de Hibernate.
+     *
+     * @param pasajeId El ID del pasaje que fue devuelto.
+     * @param montoReembolsado El monto exacto que fue reembolsado al cliente.
+     * @throws MessagingException Si ocurre un error al construir o enviar el correo.
+     * @throws EntityNotFoundException Si el pasaje con el ID proporcionado no se encuentra.
+     */
+    public void sendRefundConfirmationEmail(Integer pasajeId, double montoReembolsado) throws MessagingException {
+        logger.info("Construyendo email de devolución para pasaje ID: {}", pasajeId);
+
+        // 1. Re-hidratar la entidad: Buscar el pasaje en la base de datos.
+        // Esto es crucial porque el método se ejecuta en un hilo separado.
+        Pasaje pasaje = pasajeRepository.findById(pasajeId)
+                .orElseThrow(() -> new EntityNotFoundException("No se pudo enviar email de devolución. Pasaje no encontrado con ID: " + pasajeId));
+
+        // 2. Preparar el envío del correo.
         MimeMessage mimeMessage = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
+        // 3. Obtener los objetos relacionados del pasaje "fresco".
         Viaje viaje = pasaje.getDatosViaje();
         Usuario cliente = pasaje.getCliente();
 
+        // 4. Formatear los datos para el email.
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        String nombreCliente = cliente.getNombre();
+        // Usar Locale.US asegura que el separador decimal sea un punto (.).
+        String montoFormateado = String.format(Locale.US, "%.2f", montoReembolsado);
 
+        // 5. Configurar los detalles del email.
         helper.setFrom(fromEmail);
         helper.setTo(cliente.getEmail());
         helper.setSubject("✅ Devolución procesada - Viaje a " + viaje.getDestino().getNombre());
 
-        String nombreCliente = cliente.getNombre();
-
-        // Usamos Locale.US para asegurar que el punto sea el separador decimal
-        String montoFormateado = String.format(Locale.US, "%.2f", montoReembolsado);
-
+        // 6. Construir el cuerpo HTML del correo.
         String htmlContent = """
         <!DOCTYPE html>
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; color: #333; }
-                .container { padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px; margin: auto; }
-                .header { font-size: 24px; color: #1a73e8; }
-                .details { margin-top: 20px; }
+                body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
+                .container { padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px; margin: auto; background-color: #f9f9f9; }
+                .header { font-size: 24px; color: #1a73e8; font-weight: bold; }
+                .details { margin-top: 20px; padding: 15px; background-color: #ffffff; border-left: 4px solid #1a73e8; }
+                .details h3 { margin-top: 0; color: #333; }
                 .details p { margin: 5px 0; }
-                .highlight { color: #d93025; font-weight: bold; }
-                .footer { margin-top: 25px; font-size: 12px; color: #777; }
+                .highlight { margin-top: 15px; padding: 10px; background-color: #fffbe6; border: 1px solid #ffe58f; border-radius: 4px; font-size: 14px; }
+                .footer { margin-top: 25px; font-size: 12px; color: #777; text-align: center; }
             </style>
         </head>
         <body>
@@ -336,7 +362,9 @@ public class EmailService {
                     <h3>Detalles del Reembolso</h3>
                     <p>Hemos procesado un reembolso a tu cuenta de PayPal.</p>
                     <p><strong>Monto Reembolsado:</strong> $%s USD</p>
-                    <p class="highlight">Por favor, ten en cuenta que el reembolso puede tardar unos días en verse reflejado en tu cuenta, dependiendo de los tiempos de procesamiento de PayPal y tu banco.</p>
+                    <div class="highlight">
+                        <strong>Importante:</strong> El reembolso puede tardar de 3 a 5 días hábiles en aparecer en tu estado de cuenta, dependiendo de los tiempos de procesamiento de PayPal y tu banco.
+                    </div>
                 </div>
                 
                 <p>Lamentamos que no puedas viajar con nosotros en esta ocasión y esperamos verte pronto.</p>
@@ -353,12 +381,14 @@ public class EmailService {
                 viaje.getOrigen().getNombre(),
                 viaje.getFechaHoraSalida().format(dateFormatter),
                 pasaje.getNumeroAsiento(),
-                montoFormateado // Usamos la variable ya formateada
+                montoFormateado
         );
 
+        // 7. Asignar el contenido y enviar.
         helper.setText(htmlContent, true);
         mailSender.send(mimeMessage);
-        logger.info("Email de confirmación de devolución enviado a {}", cliente.getEmail());
+
+        logger.info("Email de confirmación de devolución enviado exitosamente a {} para pasaje ID {}", cliente.getEmail(), pasajeId);
     }
 }
 

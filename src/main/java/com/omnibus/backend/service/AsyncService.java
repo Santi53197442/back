@@ -31,16 +31,15 @@ public class AsyncService {
         }
     }
 
-    @Async("taskExecutor") // Usa el mismo ejecutor de tareas que tus otros métodos async
-    public void sendRefundEmailAsync(Pasaje pasaje, double montoReembolsado) {
+    @Async("taskExecutor")
+    public void sendRefundEmailAsync(Integer pasajeId, double montoReembolsado) { // <-- CAMBIO EN LA FIRMA
         try {
-            logger.info("Iniciando envío asíncrono de email de DEVOLUCIÓN para pasaje ID: {}", pasaje.getId());
-            emailService.sendRefundConfirmationEmail(pasaje, montoReembolsado);
+            logger.info("Iniciando envío asíncrono de email de DEVOLUCIÓN para pasaje ID: {}", pasajeId);
+            // Pasamos los mismos parámetros al siguiente servicio.
+            emailService.sendRefundConfirmationEmail(pasajeId, montoReembolsado); // <-- CAMBIO EN LA LLAMADA
         } catch (Exception e) {
-            // Logueamos el error completo pero no relanzamos la excepción para no afectar
-            // a otros hilos asíncronos.
             logger.error("Error en tarea asíncrona al enviar email de DEVOLUCIÓN para pasaje ID {}: {}",
-                    pasaje.getId(), e.getMessage(), e);
+                    pasajeId, e.getMessage(), e);
         }
     }
 }

@@ -77,6 +77,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/buscar-disponibles").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/listado-precios").permitAll()
 
+                        .requestMatchers("/api/vendedor/notificaciones/**").authenticated()
                         // --- ENDPOINTS ACCESIBLES POR CLIENTES, VENDEDORES Y ADMINS (DENTRO DE /api/vendedor) ---
 
                         .requestMatchers(HttpMethod.GET, "/api/vendedor/viajes/*/detalles-asientos")

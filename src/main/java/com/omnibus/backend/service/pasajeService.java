@@ -484,8 +484,9 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
 
         // 6. Enviar notificaciones al cliente
         // 6.1 Notificación por EMAIL (Asíncrona para no retrasar la respuesta)
+        logger.info("--> Despachando tarea para enviar email de devolución para pasaje ID: {}", pasajeId);
         asyncService.sendRefundEmailAsync(pasaje, montoAReembolsar);
-
+        logger.info("--> Creando notificación web de devolución para pasaje ID: {}", pasajeId);
         // 6.2 Notificación WEB (Directa, es una operación rápida)
         try {
             notificacionService.crearNotificacionDevolucion(pasaje, montoAReembolsar);

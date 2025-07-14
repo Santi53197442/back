@@ -24,8 +24,11 @@ public class ViajeStatusScheduler {
 
     private final ViajeRepository viajeRepository;
     private final OmnibusRepository omnibusRepository;
-    private final PasajeRepository pasajeRepository; // <-- NUEVA DEPENDENCIA
-    private final EmailService emailService;         // <-- NUEVA DEPENDENCIA
+    private final PasajeRepository pasajeRepository;
+    private final EmailService emailService;
+
+    @Autowired
+    private NotificacionService notificacionService;
 
     @Autowired
     private FirebaseNotificationService firebaseNotificationService;
@@ -113,6 +116,7 @@ public class ViajeStatusScheduler {
     }
 
     private void cerrarVentasYNotificar(LocalDateTime ahora) {
+        // Busca viajes cuya hora de salida esté entre la hora actual y una hora en el futuro.
         LocalDateTime limiteDeCierre = ahora.plusHours(1);
         List<Viaje> viajesParaCerrarVentas = viajeRepository.findTripsToCloseSales(ahora, limiteDeCierre);
 
@@ -123,30 +127,44 @@ public class ViajeStatusScheduler {
                 logger.info("--> Cerrando ventas para el viaje ID {}. Hora de salida: {}", viaje.getId(), viaje.getFechaHoraSalida());
                 viaje.setEstado(EstadoViaje.VENTAS_CERRADAS);
 
-                // Ahora, notificar a los pasajeros con pasajes VENDIDOS
-                // Usamos el nuevo método del repositorio
+                // Obtiene todos los pasajes vendidos para este viaje específico.
                 List<Pasaje> pasajesDelViaje = pasajeRepository.findByDatosViajeAndEstado(viaje, EstadoPasaje.VENDIDO);
                 logger.info("...Encontrados {} pasajeros con pasajes VENDIDOS para notificar en el viaje ID {}.", pasajesDelViaje.size(), viaje.getId());
 
+                // Itera sobre cada pasaje para notificar a cada cliente.
                 for (Pasaje pasaje : pasajesDelViaje) {
+
+                    // 1. Enviar Email
                     try {
                         emailService.sendDepartureReminderEmail(pasaje);
                     } catch (Exception e) {
-                        logger.error("...[ERROR] No se pudo enviar el recordatorio al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
+                        logger.error("...[ERROR] No se pudo enviar el recordatorio por EMAIL al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
                                 pasaje.getCliente().getId(), pasaje.getCliente().getEmail(), viaje.getId(), e.getMessage());
                     }
 
+                    // 2. Enviar Notificación Push (Firebase)
                     try {
-                        // Enviar notificación push
                         firebaseNotificationService.sendVentasCerradasNotification(pasaje);
-                        logger.info("...Notificación push enviada a cliente ID {} para viaje ID {}", pasaje.getCliente().getId(), viaje.getId());
+                        logger.info("...Notificación PUSH enviada a cliente ID {} para viaje ID {}", pasaje.getCliente().getId(), viaje.getId());
                     } catch (Exception e) {
-                        logger.error("...[ERROR] No se pudo enviar notificación push al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
+                        logger.error("...[ERROR] No se pudo enviar notificación PUSH al cliente ID {} ({}) para el viaje ID {}. Causa: {}",
                                 pasaje.getCliente().getId(), pasaje.getCliente().getEmail(), viaje.getId(), e.getMessage());
+                    }
+
+                    // 3. --- ¡NUEVA LÓGICA: CREAR NOTIFICACIÓN WEB! ---
+                    try {
+                        notificacionService.crearNotificacionRecordatorioViaje(pasaje);
+                        logger.info("...Notificación WEB (campanita) creada para cliente ID {} para viaje ID {}", pasaje.getCliente().getId(), viaje.getId());
+                    } catch (Exception e) {
+                        logger.error("...[ERROR] No se pudo crear la notificación WEB para el cliente ID {} para el viaje ID {}. Causa: {}",
+                                pasaje.getCliente().getId(), viaje.getId(), e.getMessage());
                     }
                 }
             }
+            // Guarda todos los viajes modificados en la base de datos en una sola operación.
             viajeRepository.saveAll(viajesParaCerrarVentas);
+            logger.info("[!] Proceso de cierre de ventas y notificación finalizado.");
         }
+        // Si no se encuentran viajes, el método simplemente termina sin hacer nada, lo cual es correcto.
     }
 }

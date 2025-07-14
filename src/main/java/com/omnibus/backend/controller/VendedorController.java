@@ -42,6 +42,12 @@ import com.omnibus.backend.service.AsyncService;
 import com.omnibus.backend.service.EmailService;
 import org.springframework.context.annotation.Lazy;
 
+import com.omnibus.backend.model.Notificacion;
+import com.omnibus.backend.model.Usuario;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
+import com.omnibus.backend.repository.NotificacionRepository;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -62,6 +68,7 @@ public class VendedorController {
     private final Validator validator;
     private final pasajeService pasajeService;
     private final AsyncService asyncService;
+    private final NotificacionRepository notificacionRepository;
 
     @Autowired
     public VendedorController(LocalidadService localidadService,
@@ -69,13 +76,15 @@ public class VendedorController {
                               ViajeService viajeService,
                               Validator validator,
                               pasajeService pasajeService,
-                              AsyncService asyncService) {
+                              AsyncService asyncService,
+                              NotificacionRepository notificacionRepository) {
         this.localidadService = localidadService;
         this.omnibusService = omnibusService;
         this.viajeService = viajeService;
         this.validator = validator;
         this.pasajeService = pasajeService;
         this.asyncService = asyncService;
+        this.notificacionRepository = notificacionRepository;
     }
 
     // --- Endpoints de Localidad ---
@@ -782,5 +791,64 @@ public class VendedorController {
             logger.error("Error interno al procesar devolución para pasaje {}: {}", pasajeId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Error interno al procesar la devolución."));
         }
+    }
+
+
+    // notificacion
+    @GetMapping("/notificaciones")
+    @PreAuthorize("isAuthenticated()") // Cualquier usuario autenticado puede ver sus notificaciones
+    public ResponseEntity<List<Notificacion>> getMisNotificaciones(@AuthenticationPrincipal Usuario usuario) {
+        if (usuario == null) {
+            // Este caso es redundante si @PreAuthorize funciona, pero es una buena práctica de seguridad.
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Collections.emptyList());
+        }
+        logger.info("API: Solicitud de notificaciones para el usuario ID: {}", usuario.getId());
+        List<Notificacion> notificaciones = notificacionRepository.findByUsuarioOrderByFechaCreacionDesc(usuario);
+        return ResponseEntity.ok(notificaciones);
+    }
+
+    @GetMapping("/notificaciones/unread-count")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Long>> getUnreadCount(@AuthenticationPrincipal Usuario usuario) {
+        if (usuario == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // No logueamos esta llamada para no llenar los logs, ya que se puede llamar frecuentemente.
+        long count = notificacionRepository.countByUsuarioAndLeidaIsFalse(usuario);
+        return ResponseEntity.ok(Collections.singletonMap("count", count));
+    }
+
+    @PostMapping("/notificaciones/{id}/marcar-leida")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> marcarComoLeida(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario) {
+        if (usuario == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        logger.info("API: Usuario ID {} intenta marcar notificación ID {} como leída.", usuario.getId(), id);
+
+        // Busca la notificación por su ID.
+        return notificacionRepository.findById(id)
+                .map(notificacion -> {
+                    // ¡Importante! Verificar que la notificación pertenece al usuario que hace la petición.
+                    if (!notificacion.getUsuario().getId().equals(usuario.getId())) {
+                        logger.warn("API: ACCESO DENEGADO. Usuario ID {} intentó marcar una notificación del usuario ID {}.",
+                                usuario.getId(), notificacion.getUsuario().getId());
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN).<Void>build(); // 403 Prohibido
+                    }
+                    // Si ya está leída, no hacemos nada, pero devolvemos OK.
+                    if (notificacion.isLeida()) {
+                        return ResponseEntity.ok().<Void>build();
+                    }
+                    // Marcar como leída y guardar.
+                    notificacion.setLeida(true);
+                    notificacionRepository.save(notificacion);
+                    logger.info("API: Notificación ID {} marcada como leída para el usuario ID {}.", id, usuario.getId());
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElseGet(() -> {
+                    logger.warn("API: Intento de marcar como leída una notificación no existente. ID: {}", id);
+                    return ResponseEntity.notFound().build(); // 404 No Encontrado
+                });
     }
 }

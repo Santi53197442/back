@@ -131,14 +131,17 @@ public class EmailService {
      * MODIFICADO: HTML y CSS rediseñados para un aspecto más limpio y moderno.
      * Se eliminó la imagen del bus.
      */
-    private String buildTicketHtml(PasajeResponseDTO pasaje, String qrCodeSrc) { // <-- CAMBIO EN LA FIRMA
+    private String buildTicketHtml(PasajeResponseDTO pasaje, String qrCodeSrc) {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
-        String ticketNumber = String.format("%04d %04d", pasaje.getId() / 1000, pasaje.getId() % 1000);
+        // --- CAMBIO 1: Formato del Ticket ID ---
+        // Formatea el ID para que tenga al menos 4 dígitos, con ceros a la izquierda.
+        String ticketIdFormatted = String.format("%04d", pasaje.getId());
+        String ticketNumberDisplay = "#0000 " + ticketIdFormatted;
+
         String formattedPrice = String.format("€ %.2f", pasaje.getPrecio());
 
-        // NOTA: El HTML y CSS son los mismos, solo cambia cómo se inserta el QR
         return """
         <!DOCTYPE html>
         <html lang="es">
@@ -159,7 +162,7 @@ public class EmailService {
                 .route-box .city { font-size: 20px; font-weight: 600; text-transform: uppercase;}
                 .route-box .arrow { font-size: 24px; color: #a0aec0; margin: 8px 0; line-height: 1; }
                 .stub-header { font-size: 20px; font-weight: 600; color: #1a202c; margin-bottom: 25px; text-align: center;}
-                .qr-code { width: 180px; height: 180px; margin-bottom: 20px; }
+                .qr-code { width: 180px; height: 180px; margin: 0 auto 20px auto; display: block; } /* display: block y margin: auto para centrar */
                 .ticket-number-stub { font-size: 16px; font-weight: 600; color: #718096; letter-spacing: 1px; text-align: center; }
             </style>
         </head>
@@ -169,7 +172,7 @@ public class EmailService {
                     <td class="main-part" style="padding:35px; background-color:#f8f9fa; border-top-left-radius: 12px; border-bottom-left-radius: 12px; border-right: 2px dashed #d8dde3;">
                         <div class="header" style="padding-bottom: 20px; border-bottom: 1px solid #dee2e6; margin-bottom: 25px;">
                             <h1 style="font-size:24px; font-weight:600; color:#1a202c; margin:0;">Bus Ticket</h1>
-                            <span style="font-size:14px; color:#718096;">Ticket ID: #%s</span>
+                            <span style="font-size:14px; color:#718096;">Ticket ID: %s</span>
                         </div>
                         <table width="100%%" cellpadding="0" cellspacing="0" role="presentation">
                             <tr>
@@ -196,18 +199,20 @@ public class EmailService {
                     </td>
                     <td class="stub-part" width="280" style="width:280px; background-color:#ffffff; padding:35px; text-align:center; vertical-align:middle; border-top-right-radius: 12px; border-bottom-right-radius: 12px;">
                          <div class="stub-header" style="font-size:20px; font-weight:600; color:#1a202c; margin-bottom:25px;">ABORDAR AQUÍ</div>
-                         <!-- Para corregir el centrado en el PDF, envolvemos la imagen en un div centrado -->
+                         
+                         <!-- --- CAMBIO 2: Corrección del centrado del QR --- -->
                          <div style="text-align: center;">
-                            <img src="%s" alt="QR Code" class="qr-code" width="180" height="180" style="width:180px; height:180px; margin-bottom:20px;" />
+                             <img src="%s" alt="QR Code" class="qr-code" width="180" height="180" style="width:180px; height:180px; margin: 0 auto 20px auto; display: block;" />
                          </div>
-                         <div class="ticket-number-stub" style="font-size:16px; font-weight:600; color:#718096; letter-spacing:1px;">#%s</div>
+                         
+                         <div class="ticket-number-stub" style="font-size:16px; font-weight:600; color:#718096; letter-spacing:1px;">%s</div>
                     </td>
                 </tr>
             </table>
         </body>
         </html>
         """.formatted(
-                ticketNumber,
+                ticketNumberDisplay, // Usa el nuevo formato para el header
                 pasaje.getClienteNombre(),
                 pasaje.getFechaViaje().format(dateFormatter),
                 pasaje.getHoraSalidaViaje().format(timeFormatter),
@@ -216,11 +221,10 @@ public class EmailService {
                 formattedPrice,
                 pasaje.getOrigenViaje(),
                 pasaje.getDestinoViaje(),
-                qrCodeSrc, // <-- CAMBIO: Se usa el parámetro qrCodeSrc
-                ticketNumber
+                qrCodeSrc,
+                ticketNumberDisplay // Usa el nuevo formato para el talón
         );
     }
-
 
     /**
      * NUEVO: Envía un correo de recordatorio de viaje a un pasajero.

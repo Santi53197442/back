@@ -40,6 +40,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
     private final PrecioService precioService;
     private final AsyncService asyncService;
     private final NotificacionService notificacionService;
+    private final EmailService emailService;
 
     // --- CONSTRUCTOR ÚNICO Y CORREGIDO ---
     // Spring usará este constructor para inyectar TODAS las dependencias necesarias.
@@ -50,7 +51,8 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
                          PaypalService paypalService,
                          PrecioService precioService,
                          AsyncService asyncService,
-                         NotificacionService notificacionService) {
+                         NotificacionService notificacionService,
+                         EmailService emailService) {
         this.pasajeRepository = pasajeRepository;
         this.viajeRepository = viajeRepository;
         this.usuarioRepository = usuarioRepository;
@@ -58,6 +60,7 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         this.precioService = precioService;
         this.asyncService = asyncService;
         this.notificacionService = notificacionService;
+        this.emailService = emailService;
     }
 
     @Transactional
@@ -485,7 +488,16 @@ public class pasajeService { // Corregido a PascalCase: PasajeService
         // 6. Enviar notificaciones al cliente
         // 6.1 Notificación por EMAIL (Asíncrona para no retrasar la respuesta)
         logger.info("--> Despachando tarea para enviar email de devolución para pasaje ID: {}", pasajeId);
-        asyncService.sendRefundEmailAsync(pasaje.getId(), montoAReembolsar);
+        try {
+            logger.info("--> Enviando email de devolución para pasaje ID: {}", pasajeId);
+            // Pasas el objeto 'pasaje' directamente, ya que estás en la misma transacción
+            emailService.sendRefundConfirmationEmail(pasaje, montoAReembolsar);
+        } catch (Exception e) {
+            // MUY IMPORTANTE: Si el email falla, no queremos que se revierta la devolución.
+            // Solo registramos el error para poder investigarlo después.
+            logger.error("Error al enviar email de confirmación para la devolución del pasaje ID {}: {}", pasajeId, e.getMessage());
+        }
+
         logger.info("--> Creando notificación web de devolución para pasaje ID: {}", pasajeId);
         // 6.2 Notificación WEB (Directa, es una operación rápida)
         try {

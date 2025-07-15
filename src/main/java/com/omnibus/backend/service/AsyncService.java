@@ -31,15 +31,4 @@ public class AsyncService {
         }
     }
 
-    @Async("taskExecutor")
-    public void sendRefundEmailAsync(Integer pasajeId, double montoReembolsado) { // <-- CAMBIO EN LA FIRMA
-        try {
-            logger.info("Iniciando envío asíncrono de email de DEVOLUCIÓN para pasaje ID: {}", pasajeId);
-            // Pasamos los mismos parámetros al siguiente servicio.
-            emailService.sendRefundConfirmationEmail(pasajeId, montoReembolsado); // <-- CAMBIO EN LA LLAMADA
-        } catch (Exception e) {
-            logger.error("Error en tarea asíncrona al enviar email de DEVOLUCIÓN para pasaje ID {}: {}",
-                    pasajeId, e.getMessage(), e);
-        }
-    }
 }

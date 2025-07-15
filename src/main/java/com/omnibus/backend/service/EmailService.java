@@ -291,39 +291,24 @@ public class EmailService {
         logger.info("Email de recordatorio de viaje enviado a {}", cliente.getEmail());
     }
 
-    /**
-     * Construye y envía un correo electrónico de confirmación de devolución y reembolso.
-     * Este método se llama de forma asíncrona, por lo que busca la entidad Pasaje
-     * desde la base de datos para evitar problemas de estado de la sesión de Hibernate.
-     *
-     * @param pasajeId El ID del pasaje que fue devuelto.
-     * @param montoReembolsado El monto exacto que fue reembolsado al cliente.
-     * @throws MessagingException Si ocurre un error al construir o enviar el correo.
-     * @throws EntityNotFoundException Si el pasaje con el ID proporcionado no se encuentra.
-     */
-    public void sendRefundConfirmationEmail(Integer pasajeId, double montoReembolsado) throws MessagingException {
-        logger.info("Construyendo email de devolución para pasaje ID: {}", pasajeId);
 
-        // 1. Re-hidratar la entidad: Buscar el pasaje en la base de datos.
-        // Esto es crucial porque el método se ejecuta en un hilo separado.
-        Pasaje pasaje = pasajeRepository.findById(pasajeId)
-                .orElseThrow(() -> new EntityNotFoundException("No se pudo enviar email de devolución. Pasaje no encontrado con ID: " + pasajeId));
 
-        // 2. Preparar el envío del correo.
+    public void sendRefundConfirmationEmail(Pasaje pasaje, double montoReembolsado) throws MessagingException {
+        // La línea que buscaba el pasaje por ID ha sido ELIMINADA.
+
+        logger.info("Construyendo email de devolución para pasaje ID: {}", pasaje.getId()); // Usamos pasaje.getId()
+
+        // El resto del código que usa el objeto 'pasaje' se mantiene igual.
         MimeMessage mimeMessage = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-        // 3. Obtener los objetos relacionados del pasaje "fresco".
         Viaje viaje = pasaje.getDatosViaje();
         Usuario cliente = pasaje.getCliente();
 
-        // 4. Formatear los datos para el email.
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         String nombreCliente = cliente.getNombre();
-        // Usar Locale.US asegura que el separador decimal sea un punto (.).
         String montoFormateado = String.format(Locale.US, "%.2f", montoReembolsado);
 
-        // 5. Configurar los detalles del email.
         helper.setFrom(fromEmail);
         helper.setTo(cliente.getEmail());
         helper.setSubject("✅ Devolución procesada - Viaje a " + viaje.getDestino().getNombre());
@@ -388,7 +373,7 @@ public class EmailService {
         helper.setText(htmlContent, true);
         mailSender.send(mimeMessage);
 
-        logger.info("Email de confirmación de devolución enviado exitosamente a {} para pasaje ID {}", cliente.getEmail(), pasajeId);
+        logger.info("Email de confirmación de devolución enviado exitosamente a {} para pasaje ID {}", cliente.getEmail(), pasaje.getId());
     }
 }
 

@@ -68,6 +68,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // --- PÚBLICO Y OPCIONES ---
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight CORS
+                                       
+                        .requestMatchers(
+                                "/swagger-ui.html", // La página principal de Swagger UI
+                                "/swagger-ui/**",   // Todos los recursos de la UI (CSS, JS, etc.)
+                                "/v3/api-docs/**",  // La especificación de la API en formato JSON
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
+                                       
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/auth/forgot-password").permitAll()

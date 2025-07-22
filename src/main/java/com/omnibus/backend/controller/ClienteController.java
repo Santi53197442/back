@@ -115,4 +115,31 @@ public class ClienteController {
                     .body(Map.of("message", "Error interno del servidor"));
         }
     }
+
+    /**
+     * Borra el token FCM del cliente.
+     * Se usa cuando hace logout de la app.
+     */
+    @DeleteMapping("/fcm-token")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<?> eliminarFcmToken() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+            
+            boolean tokenEliminado = userService.limpiarTokenFCM(email);
+            
+            if (tokenEliminado) {
+                logger.info("Token FCM eliminado para cliente: {}", email);
+                return ResponseEntity.ok(Map.of("message", "Token FCM eliminado exitosamente"));
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Cliente no encontrado"));
+            }
+        } catch (Exception e) {
+            logger.error("Error al eliminar token FCM: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error interno del servidor"));
+        }
+    }
 }
